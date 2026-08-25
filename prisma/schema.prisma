@@ -1,0 +1,1194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AccountingPeriod {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  year         Int          @db.SmallInt
+  month        Int          @db.SmallInt
+  status       String       @default("open")
+  closedAt     DateTime?    @map("closed_at") @db.Timestamptz(6)
+  closedBy     String?      @map("closed_by") @db.Uuid
+  reopenedAt   DateTime?    @map("reopened_at") @db.Timestamptz(6)
+  reopenedBy   String?      @map("reopened_by") @db.Uuid
+  reopenReason String?      @map("reopen_reason")
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  billingRun   BillingRun[]
+  charge       Charge[]
+
+  @@unique([tenantId, year, month])
+  @@map("accounting_period")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Allergy {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  childId     String    @map("child_id") @db.Uuid
+  allergen    String
+  severity    String    @default("moderate")
+  reaction    String?
+  instruction String?
+  createdBy   String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  child       Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("allergy")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Announcement {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String         @map("tenant_id") @db.Uuid
+  branchId     String?        @map("branch_id") @db.Uuid
+  title        String
+  body         String
+  priority     String         @default("normal")
+  audienceType String         @map("audience_type")
+  audienceIds  String[]       @map("audience_ids") @db.Uuid
+  fileIds      String[]       @map("file_ids") @db.Uuid
+  publishAt    DateTime?      @map("publish_at") @db.Timestamptz(6)
+  expiresAt    DateTime?      @map("expires_at") @db.Timestamptz(6)
+  publishedAt  DateTime?      @map("published_at") @db.Timestamptz(6)
+  createdBy    String         @map("created_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  branch       Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  notification Notification[]
+
+  @@map("announcement")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AppUser {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String                   @map("tenant_id") @db.Uuid
+  fullName               String                   @map("full_name")
+  username               String?
+  email                  String?
+  phone                  String
+  passwordHash           String                   @map("password_hash")
+  language               String                   @default("ru")
+  status                 String                   @default("active")
+  failedAttempts         Int                      @default(0) @map("failed_attempts") @db.SmallInt
+  lockedUntil            DateTime?                @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt            DateTime?                @map("last_login_at") @db.Timestamptz(6)
+  createdBy              String?                  @map("created_by") @db.Uuid
+  createdAt              DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime                 @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?                @map("deleted_at") @db.Timestamptz(6)
+  tenant                 Tenant                   @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  groupStaff             GroupStaff[]
+  notification           Notification[]
+  passwordResetToken     PasswordResetToken[]
+  telegramBinding        TelegramBinding[]
+  telegramLinkToken      TelegramLinkToken[]
+  userBranch             UserBranch[]
+  userPermissionOverride UserPermissionOverride[]
+  userRole               UserRole[]
+  userSession            UserSession[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+  @@unique([tenantId, username])
+  @@map("app_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AttendanceCorrection {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String        @map("tenant_id") @db.Uuid
+  attendanceDayId String        @map("attendance_day_id") @db.Uuid
+  field           String
+  oldValue        String?       @map("old_value")
+  newValue        String?       @map("new_value")
+  reason          String
+  correctedBy     String        @map("corrected_by") @db.Uuid
+  correctedAt     DateTime      @default(now()) @map("corrected_at") @db.Timestamptz(6)
+  attendanceDay   AttendanceDay @relation(fields: [attendanceDayId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenantId, correctedAt(sort: Desc)], map: "idx_att_corr_time")
+  @@map("attendance_correction")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AttendanceDay {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                 @map("tenant_id") @db.Uuid
+  branchId             String                 @map("branch_id") @db.Uuid
+  childId              String                 @map("child_id") @db.Uuid
+  groupId              String?                @map("group_id") @db.Uuid
+  attendanceDate       DateTime               @map("attendance_date") @db.Date
+  status               String                 @default("present")
+  checkInAt            DateTime?              @map("check_in_at") @db.Timestamptz(6)
+  checkInBy            String?                @map("check_in_by") @db.Uuid
+  checkInNote          String?                @map("check_in_note")
+  healthObservation    String?                @map("health_observation")
+  checkOutAt           DateTime?              @map("check_out_at") @db.Timestamptz(6)
+  checkOutBy           String?                @map("check_out_by") @db.Uuid
+  checkOutNote         String?                @map("check_out_note")
+  pickupPersonId       String?                @map("pickup_person_id") @db.Uuid
+  pickupPermissionId   String?                @map("pickup_permission_id") @db.Uuid
+  billable             Boolean                @default(true)
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  statusId             String?                @map("status_id") @db.Uuid
+  statusKind           String?                @map("status_kind")
+  billingWeight        Decimal                @default(1.000) @map("billing_weight") @db.Decimal(4, 3)
+  attendanceCorrection AttendanceCorrection[]
+  branch               Branch                 @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  child                Child                  @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  childGroup           ChildGroup?            @relation(fields: [groupId], references: [id], onUpdate: NoAction)
+  lookupValue          LookupValue?           @relation(fields: [statusId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant               Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pickupPermission     PickupPermission?      @relation(fields: [pickupPermissionId], references: [id], onUpdate: NoAction, map: "fk_att_pickup_perm")
+  pickupPerson         PickupPerson?          @relation(fields: [pickupPersonId], references: [id], onUpdate: NoAction, map: "fk_att_pickup_person")
+
+  @@unique([tenantId, childId, attendanceDate])
+  @@index([tenantId, attendanceDate], map: "idx_attendance_date")
+  @@index([groupId, attendanceDate], map: "idx_attendance_group")
+  @@index([tenantId, attendanceDate, statusKind], map: "idx_attendance_kind")
+  @@map("attendance_day")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  diff       Json?
+  ipAddress  String?  @map("ip_address") @db.Inet
+  userAgent  String?  @map("user_agent")
+  traceId    String?  @map("trace_id")
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  @@index([tenantId, entityType, entityId, occurredAt(sort: Desc)], map: "idx_audit_entity")
+  @@index([tenantId, occurredAt(sort: Desc)], map: "idx_audit_time")
+  @@index([tenantId, userId, occurredAt(sort: Desc)], map: "idx_audit_user")
+  @@map("audit_log")
+}
+
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+model BillingRules {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  version       Int
+  effectiveFrom DateTime     @map("effective_from") @db.Date
+  effectiveTo   DateTime?    @map("effective_to") @db.Date
+  rules         Json
+  note          String?
+  createdBy     String?      @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  billingRun    BillingRun[]
+  charge        Charge[]
+
+  @@unique([tenantId, version])
+  @@map("billing_rules")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model BillingRun {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String           @map("tenant_id") @db.Uuid
+  periodId         String           @map("period_id") @db.Uuid
+  billingRulesId   String           @map("billing_rules_id") @db.Uuid
+  status           String           @default("preview")
+  idempotencyKey   String?          @map("idempotency_key")
+  childCount       Int?             @map("child_count")
+  totalTiyin       BigInt?          @map("total_tiyin")
+  previewData      Json?            @map("preview_data")
+  createdBy        String           @map("created_by") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  committedAt      DateTime?        @map("committed_at") @db.Timestamptz(6)
+  error            String?
+  billingRules     BillingRules     @relation(fields: [billingRulesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accountingPeriod AccountingPeriod @relation(fields: [periodId], references: [id], onUpdate: NoAction)
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  charge           Charge[]
+
+  @@map("billing_run")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Branch {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  code          String
+  name          String
+  address       String?
+  phone         String?
+  timezone      String          @default("Asia/Tashkent")
+  status        String          @default("active")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?       @map("deleted_at") @db.Timestamptz(6)
+  announcement  Announcement[]
+  attendanceDay AttendanceDay[]
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  charge        Charge[]
+  child         Child[]
+  childGroup    ChildGroup[]
+  expense       Expense[]
+  holiday       Holiday[]
+  payment       Payment[]
+  tariff        Tariff[]
+  userBranch    UserBranch[]
+  userRole      UserRole[]
+
+  @@unique([tenantId, code])
+  @@map("branch")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Charge {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  branchId          String              @map("branch_id") @db.Uuid
+  childId           String              @map("child_id") @db.Uuid
+  periodId          String              @map("period_id") @db.Uuid
+  billingRunId      String?             @map("billing_run_id") @db.Uuid
+  billingRulesId    String?             @map("billing_rules_id") @db.Uuid
+  kind              String
+  amountTiyin       BigInt              @map("amount_tiyin")
+  sign              Int                 @default(1) @db.SmallInt
+  sourceChargeId    String?             @map("source_charge_id") @db.Uuid
+  tariffSnapshot    Json?               @map("tariff_snapshot")
+  calculationTrace  Json?               @map("calculation_trace")
+  description       String?
+  dueDate           DateTime?           @map("due_date") @db.Date
+  issuedAt          DateTime            @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdBy         String?             @map("created_by") @db.Uuid
+  reversalReason    String?             @map("reversal_reason")
+  billingRules      BillingRules?       @relation(fields: [billingRulesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingRun        BillingRun?         @relation(fields: [billingRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch            Branch              @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  child             Child               @relation(fields: [childId], references: [id], onUpdate: NoAction)
+  accountingPeriod  AccountingPeriod    @relation(fields: [periodId], references: [id], onUpdate: NoAction)
+  charge            Charge?             @relation("chargeTocharge", fields: [sourceChargeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  otherCharge       Charge[]            @relation("chargeTocharge")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  paymentAllocation PaymentAllocation[]
+
+  @@index([childId, issuedAt(sort: Desc)], map: "idx_charge_child")
+  @@index([tenantId, periodId], map: "idx_charge_period")
+  @@map("charge")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Child {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String               @map("tenant_id") @db.Uuid
+  branchId           String               @map("branch_id") @db.Uuid
+  firstName          String               @map("first_name")
+  lastName           String               @map("last_name")
+  middleName         String?              @map("middle_name")
+  photoFileId        String?              @map("photo_file_id") @db.Uuid
+  birthDate          DateTime             @map("birth_date") @db.Date
+  gender             String?
+  address            String?
+  enrollmentDate     DateTime?            @map("enrollment_date") @db.Date
+  withdrawalDate     DateTime?            @map("withdrawal_date") @db.Date
+  contractNumber     String?              @map("contract_number")
+  registrationNumber String?              @map("registration_number")
+  status             String               @default("applicant")
+  note               String?
+  createdBy          String?              @map("created_by") @db.Uuid
+  updatedBy          String?              @map("updated_by") @db.Uuid
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz(6)
+  allergy            Allergy[]
+  attendanceDay      AttendanceDay[]
+  charge             Charge[]
+  branch             Branch               @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  childDocument      ChildDocument[]
+  childGuardian      ChildGuardian[]
+  childStatusHistory ChildStatusHistory[]
+  childTariff        ChildTariff[]
+  consent            Consent[]
+  discount           Discount[]
+  groupAssignment    GroupAssignment[]
+  healthIncident     HealthIncident[]
+  medicalRecord      MedicalRecord?
+  medication         Medication[]
+  payment            Payment[]
+  pickupPermission   PickupPermission[]
+  pickupPerson       PickupPerson[]
+
+  @@unique([tenantId, registrationNumber])
+  @@index([tenantId, lastName, firstName], map: "idx_child_name_trgm")
+  @@map("child")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ChildDocument {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  childId    String    @map("child_id") @db.Uuid
+  docType    String    @map("doc_type")
+  number     String?
+  issueDate  DateTime? @map("issue_date") @db.Date
+  expiryDate DateTime? @map("expiry_date") @db.Date
+  fileId     String?   @map("file_id") @db.Uuid
+  verified   Boolean   @default(false)
+  verifiedBy String?   @map("verified_by") @db.Uuid
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
+  note       String?
+  createdBy  String?   @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz(6)
+  child      Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("child_document")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ChildGroup {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  branchId        String            @map("branch_id") @db.Uuid
+  name            String
+  ageMinMonths    Int?              @map("age_min_months") @db.SmallInt
+  ageMaxMonths    Int?              @map("age_max_months") @db.SmallInt
+  capacity        Int               @default(20) @db.SmallInt
+  workingHours    Json?             @map("working_hours")
+  status          String            @default("active")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  attendanceDay   AttendanceDay[]
+  branch          Branch            @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  groupAssignment GroupAssignment[]
+  groupStaff      GroupStaff[]
+
+  @@unique([tenantId, branchId, name])
+  @@map("child_group")
+}
+
+model ChildGuardian {
+  tenantId           String   @map("tenant_id") @db.Uuid
+  childId            String   @map("child_id") @db.Uuid
+  guardianId         String   @map("guardian_id") @db.Uuid
+  relationship       String
+  isPayer            Boolean  @default(false) @map("is_payer")
+  isEmergencyContact Boolean  @default(false) @map("is_emergency_contact")
+  isPrimaryContact   Boolean  @default(false) @map("is_primary_contact")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  child              Child    @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guardian           Guardian @relation(fields: [guardianId], references: [id], onUpdate: NoAction)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([childId, guardianId])
+  @@index([guardianId], map: "idx_child_guardian_g")
+  @@map("child_guardian")
+}
+
+model ChildStatusHistory {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  childId       String   @map("child_id") @db.Uuid
+  oldStatus     String?  @map("old_status")
+  newStatus     String   @map("new_status")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  reason        String?
+  changedBy     String   @map("changed_by") @db.Uuid
+  changedAt     DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+  child         Child    @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([childId, effectiveDate(sort: Desc)], map: "idx_child_status_hist")
+  @@map("child_status_history")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ChildTariff {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  childId       String    @map("child_id") @db.Uuid
+  tariffId      String    @map("tariff_id") @db.Uuid
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  assignedBy    String?   @map("assigned_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  child         Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tariff        Tariff    @relation(fields: [tariffId], references: [id], onUpdate: NoAction)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([childId, effectiveFrom(sort: Desc)], map: "idx_child_tariff")
+  @@map("child_tariff")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Consent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  childId        String    @map("child_id") @db.Uuid
+  guardianId     String    @map("guardian_id") @db.Uuid
+  consentType    String    @map("consent_type")
+  granted        Boolean
+  grantedAt      DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  evidenceFileId String?   @map("evidence_file_id") @db.Uuid
+  child          Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guardian       Guardian  @relation(fields: [guardianId], references: [id], onUpdate: NoAction)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("consent")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Discount {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  childId    String    @map("child_id") @db.Uuid
+  kind       String
+  valueTiyin BigInt?   @map("value_tiyin")
+  valueBp    Int?      @map("value_bp")
+  validFrom  DateTime  @map("valid_from") @db.Date
+  validTo    DateTime? @map("valid_to") @db.Date
+  reason     String
+  approvedBy String?   @map("approved_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  child      Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("discount")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model DocumentTemplate {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  templateKey String   @map("template_key")
+  version     Int      @default(1)
+  bodyUz      String   @map("body_uz")
+  bodyRu      String   @map("body_ru")
+  variables   String[]
+  active      Boolean  @default(true)
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, templateKey, version])
+  @@map("document_template")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Expense {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  branchId         String    @map("branch_id") @db.Uuid
+  expenseType      String    @map("expense_type")
+  provider         String?
+  contractNumber   String?   @map("contract_number")
+  billingYear      Int       @map("billing_year") @db.SmallInt
+  billingMonth     Int       @map("billing_month") @db.SmallInt
+  invoiceNumber    String?   @map("invoice_number")
+  amountTiyin      BigInt    @map("amount_tiyin")
+  dueDate          DateTime? @map("due_date") @db.Date
+  status           String    @default("unpaid")
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz(6)
+  paidAmountTiyin  BigInt?   @map("paid_amount_tiyin")
+  attachmentFileId String?   @map("attachment_file_id") @db.Uuid
+  receiptFileId    String?   @map("receipt_file_id") @db.Uuid
+  note             String?
+  createdBy        String?   @map("created_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch           Branch    @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenantId, billingYear, billingMonth], map: "idx_expense_period")
+  @@map("expense")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ExportJob {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  reportKey String    @map("report_key")
+  format    String
+  params    Json?
+  status    String    @default("processing")
+  fileId    String?   @map("file_id") @db.Uuid
+  error     String?
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  file      File?     @relation(fields: [fileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("export_job")
+}
+
+model FeatureFlag {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  flagKey   String   @map("flag_key")
+  enabled   Boolean  @default(true)
+  config    Json     @default("{}")
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([tenantId, flagKey])
+  @@map("feature_flag")
+}
+
+model File {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String      @map("tenant_id") @db.Uuid
+  bucket       String
+  objectKey    String      @map("object_key")
+  originalName String      @map("original_name")
+  mimeType     String      @map("mime_type")
+  sizeBytes    BigInt      @map("size_bytes")
+  checksum     String?
+  entityType   String?     @map("entity_type")
+  entityId     String?     @map("entity_id") @db.Uuid
+  uploadedBy   String      @map("uploaded_by") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
+  exportJob    ExportJob[]
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  importJob    ImportJob[]
+
+  @@unique([bucket, objectKey])
+  @@map("file")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+model GroupAssignment {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String     @map("tenant_id") @db.Uuid
+  childId       String     @map("child_id") @db.Uuid
+  groupId       String     @map("group_id") @db.Uuid
+  effectiveFrom DateTime   @map("effective_from") @db.Date
+  effectiveTo   DateTime?  @map("effective_to") @db.Date
+  reason        String?
+  assignedBy    String?    @map("assigned_by") @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  child         Child      @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  childGroup    ChildGroup @relation(fields: [groupId], references: [id], onUpdate: NoAction)
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("group_assignment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model GroupStaff {
+  tenantId     String     @map("tenant_id") @db.Uuid
+  groupId      String     @map("group_id") @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  staffRole    String     @map("staff_role")
+  assignedFrom DateTime   @default(dbgenerated("CURRENT_DATE")) @map("assigned_from") @db.Date
+  assignedTo   DateTime?  @map("assigned_to") @db.Date
+  childGroup   ChildGroup @relation(fields: [groupId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser      AppUser    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([groupId, userId, staffRole])
+  @@map("group_staff")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Guardian {
+  id                                                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                                              String              @map("tenant_id") @db.Uuid
+  fullName                                              String              @map("full_name")
+  phone                                                 String
+  phoneAlt                                              String?             @map("phone_alt")
+  telegramPhone                                         String?             @map("telegram_phone")
+  email                                                 String?
+  address                                               String?
+  workplace                                             String?
+  passportNumber                                        String?             @map("passport_number")
+  preferredLanguage                                     String              @default("ru") @map("preferred_language")
+  createdBy                                             String?             @map("created_by") @db.Uuid
+  createdAt                                             DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                             DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt                                             DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  childGuardian                                         ChildGuardian[]
+  consent                                               Consent[]
+  tenant                                                Tenant              @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  notification                                          Notification[]
+  payment                                               Payment[]
+  pickupPermission                                      PickupPermission[]
+  pickupPersonPickupPersonGrantedByGuardianIdToguardian PickupPerson[]      @relation("pickup_person_granted_by_guardian_idToguardian")
+  pickupPersonPickupPersonGuardianIdToguardian          PickupPerson[]      @relation("pickup_person_guardian_idToguardian")
+  telegramBinding                                       TelegramBinding[]
+  telegramLinkToken                                     TelegramLinkToken[]
+
+  @@unique([tenantId, phone])
+  @@map("guardian")
+}
+
+model HealthIncident {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  childId          String   @map("child_id") @db.Uuid
+  occurredAt       DateTime @map("occurred_at") @db.Timestamptz(6)
+  description      String
+  actionTaken      String?  @map("action_taken")
+  guardianNotified Boolean  @default(false) @map("guardian_notified")
+  recordedBy       String   @map("recorded_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  child            Child    @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("health_incident")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model Holiday {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  branchId    String?  @map("branch_id") @db.Uuid
+  holidayDate DateTime @map("holiday_date") @db.Date
+  name        String
+  isWorking   Boolean  @default(false) @map("is_working")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch      Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("holiday")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ImportJob {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  entity      String
+  fileId      String?   @map("file_id") @db.Uuid
+  status      String    @default("validating")
+  totalRows   Int?      @map("total_rows")
+  validRows   Int?      @map("valid_rows")
+  failedRows  Int?      @map("failed_rows")
+  errors      Json?
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  file        File?     @relation(fields: [fileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("import_job")
+}
+
+model LoginAttempt {
+  id          BigInt   @id @default(autoincrement())
+  tenantId    String?  @map("tenant_id") @db.Uuid
+  login       String
+  success     Boolean
+  ipAddress   String?  @map("ip_address") @db.Inet
+  userAgent   String?  @map("user_agent")
+  attemptedAt DateTime @default(now()) @map("attempted_at") @db.Timestamptz(6)
+
+  @@index([attemptedAt(sort: Desc)], map: "idx_login_attempt_time")
+  @@map("login_attempt")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model LookupValue {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  category      String
+  code          String
+  nameUz        String          @map("name_uz")
+  nameRu        String          @map("name_ru")
+  systemKind    String          @map("system_kind")
+  config        Json            @default("{}")
+  sortOrder     Int             @default(0) @map("sort_order") @db.SmallInt
+  isSystem      Boolean         @default(false) @map("is_system")
+  active        Boolean         @default(true)
+  createdBy     String?         @map("created_by") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  attendanceDay AttendanceDay[]
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, category, code])
+  @@map("lookup_value")
+}
+
+model MedicalRecord {
+  childId               String   @id @map("child_id") @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  bloodType             String?  @map("blood_type")
+  chronicConditions     String?  @map("chronic_conditions")
+  emergencyInstructions String?  @map("emergency_instructions")
+  doctorName            String?  @map("doctor_name")
+  doctorPhone           String?  @map("doctor_phone")
+  clinic                String?
+  note                  String?
+  updatedBy             String?  @map("updated_by") @db.Uuid
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  child                 Child    @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("medical_record")
+}
+
+model Medication {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  childId      String    @map("child_id") @db.Uuid
+  name         String
+  dosage       String?
+  schedule     String?
+  validFrom    DateTime? @map("valid_from") @db.Date
+  validTo      DateTime? @map("valid_to") @db.Date
+  prescribedBy String?   @map("prescribed_by")
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+  child        Child     @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("medication")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Notification {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String        @map("tenant_id") @db.Uuid
+  templateKey         String?       @map("template_key")
+  announcementId      String?       @map("announcement_id") @db.Uuid
+  recipientGuardianId String?       @map("recipient_guardian_id") @db.Uuid
+  recipientUserId     String?       @map("recipient_user_id") @db.Uuid
+  channel             String
+  language            String        @default("ru")
+  renderedBody        String        @map("rendered_body")
+  payload             Json?
+  dedupKey            String?       @map("dedup_key")
+  status              String        @default("queued")
+  attempts            Int           @default(0) @db.SmallInt
+  lastError           String?       @map("last_error")
+  queuedAt            DateTime      @default(now()) @map("queued_at") @db.Timestamptz(6)
+  sentAt              DateTime?     @map("sent_at") @db.Timestamptz(6)
+  deliveredAt         DateTime?     @map("delivered_at") @db.Timestamptz(6)
+  readAt              DateTime?     @map("read_at") @db.Timestamptz(6)
+  announcement        Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guardian            Guardian?     @relation(fields: [recipientGuardianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser             AppUser?      @relation(fields: [recipientUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([recipientGuardianId, queuedAt(sort: Desc)], map: "idx_notification_recipient")
+  @@index([tenantId, status, queuedAt], map: "idx_notification_status")
+  @@map("notification")
+}
+
+model NotificationTemplate {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  templateKey String   @map("template_key")
+  bodyUz      String   @map("body_uz")
+  bodyRu      String   @map("body_ru")
+  variables   String[]
+  enabled     Boolean  @default(true)
+  // 05-telegram-spec.md §5 "Privacy defaults" requires this per-template
+  // toggle (charge_created/debt_reminder default to showing amounts, but a
+  // tenant can turn it off) — the provided 01-schema.sql omitted the
+  // column even though its own companion spec depends on it.
+  includeAmounts Boolean @default(true) @map("include_amounts")
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, templateKey])
+  @@map("notification_template")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Payment {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  branchId          String              @map("branch_id") @db.Uuid
+  childId           String              @map("child_id") @db.Uuid
+  payerGuardianId   String?             @map("payer_guardian_id") @db.Uuid
+  amountTiyin       BigInt              @map("amount_tiyin")
+  sign              Int                 @default(1) @db.SmallInt
+  method            String
+  sourcePaymentId   String?             @map("source_payment_id") @db.Uuid
+  receiptNo         String?             @map("receipt_no")
+  bankRef           String?             @map("bank_ref")
+  paidAt            DateTime            @map("paid_at") @db.Timestamptz(6)
+  attachmentFileId  String?             @map("attachment_file_id") @db.Uuid
+  note              String?
+  cancelReason      String?             @map("cancel_reason")
+  idempotencyKey    String?             @map("idempotency_key")
+  recordedBy        String              @map("recorded_by") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch            Branch              @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  child             Child               @relation(fields: [childId], references: [id], onUpdate: NoAction)
+  guardian          Guardian?           @relation(fields: [payerGuardianId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment           Payment?            @relation("paymentTopayment", fields: [sourcePaymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  otherPayment      Payment[]           @relation("paymentTopayment")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  paymentAllocation PaymentAllocation[]
+
+  @@index([childId, paidAt(sort: Desc)], map: "idx_payment_child")
+  @@index([tenantId, paidAt(sort: Desc)], map: "idx_payment_date")
+  @@map("payment")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PaymentAllocation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  chargeId    String   @map("charge_id") @db.Uuid
+  amountTiyin BigInt   @map("amount_tiyin")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  charge      Charge   @relation(fields: [chargeId], references: [id], onUpdate: NoAction)
+  payment     Payment  @relation(fields: [paymentId], references: [id], onUpdate: NoAction)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+
+  @@unique([paymentId, chargeId])
+  @@index([chargeId], map: "idx_alloc_charge")
+  @@map("payment_allocation")
+}
+
+model Permission {
+  key                    String                   @id
+  permGroup              String                   @map("perm_group")
+  descriptionUz          String?                  @map("description_uz")
+  descriptionRu          String?                  @map("description_ru")
+  allowedScopes          String[]                 @default(["all"]) @map("allowed_scopes")
+  sensitive              Boolean                  @default(false)
+  deprecated             Boolean                  @default(false)
+  syncedAt               DateTime                 @default(now()) @map("synced_at") @db.Timestamptz(6)
+  rolePermission         RolePermission[]
+  userPermissionOverride UserPermissionOverride[]
+
+  @@map("permission")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PickupPermission {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String          @map("tenant_id") @db.Uuid
+  childId             String          @map("child_id") @db.Uuid
+  pickupPersonId      String?         @map("pickup_person_id") @db.Uuid
+  permissionType      String          @map("permission_type")
+  adhocFullName       String?         @map("adhoc_full_name")
+  adhocPhone          String?         @map("adhoc_phone")
+  adhocIdNumber       String?         @map("adhoc_id_number")
+  validFrom           DateTime        @map("valid_from") @db.Date
+  validTo             DateTime?       @map("valid_to") @db.Date
+  oneTimeCodeHash     String?         @map("one_time_code_hash")
+  usedAt              DateTime?       @map("used_at") @db.Timestamptz(6)
+  reason              String?
+  grantedByGuardianId String?         @map("granted_by_guardian_id") @db.Uuid
+  createdBy           String?         @map("created_by") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt           DateTime?       @map("revoked_at") @db.Timestamptz(6)
+  attendanceDay       AttendanceDay[]
+  child               Child           @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guardian            Guardian?       @relation(fields: [grantedByGuardianId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pickupPerson        PickupPerson?   @relation(fields: [pickupPersonId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("pickup_permission")
+}
+
+model PickupPerson {
+  id                                                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                                          String             @map("tenant_id") @db.Uuid
+  childId                                           String             @map("child_id") @db.Uuid
+  guardianId                                        String?            @map("guardian_id") @db.Uuid
+  fullName                                          String             @map("full_name")
+  relationship                                      String?
+  phone                                             String?
+  photoFileId                                       String?            @map("photo_file_id") @db.Uuid
+  idDocType                                         String?            @map("id_doc_type")
+  idDocNumber                                       String?            @map("id_doc_number")
+  note                                              String?
+  grantedByGuardianId                               String?            @map("granted_by_guardian_id") @db.Uuid
+  createdBy                                         String?            @map("created_by") @db.Uuid
+  createdAt                                         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt                                         DateTime?          @map("revoked_at") @db.Timestamptz(6)
+  revokeReason                                      String?            @map("revoke_reason")
+  attendanceDay                                     AttendanceDay[]
+  pickupPermission                                  PickupPermission[]
+  child                                             Child              @relation(fields: [childId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guardianPickupPersonGrantedByGuardianIdToguardian Guardian?          @relation("pickup_person_granted_by_guardian_idToguardian", fields: [grantedByGuardianId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  guardianPickupPersonGuardianIdToguardian          Guardian?          @relation("pickup_person_guardian_idToguardian", fields: [guardianId], references: [id], onUpdate: NoAction)
+  tenant                                            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("pickup_person")
+}
+
+model Role {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  code           String
+  nameUz         String           @map("name_uz")
+  nameRu         String           @map("name_ru")
+  description    String?
+  isSystem       Boolean          @default(false) @map("is_system")
+  isProtected    Boolean          @default(false) @map("is_protected")
+  createdBy      String?          @map("created_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rolePermission RolePermission[]
+  userRole       UserRole[]
+
+  @@unique([tenantId, code])
+  @@map("role")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model RolePermission {
+  roleId        String     @map("role_id") @db.Uuid
+  permissionKey String     @map("permission_key")
+  scope         String     @default("all")
+  grantedBy     String?    @map("granted_by") @db.Uuid
+  grantedAt     DateTime   @default(now()) @map("granted_at") @db.Timestamptz(6)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onUpdate: NoAction)
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permission")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Setting {
+  tenantId            String   @id @map("tenant_id") @db.Uuid
+  displayName         String   @map("display_name")
+  logoFileId          String?  @map("logo_file_id") @db.Uuid
+  address             String?
+  phones              String[]
+  bankDetails         Json?    @map("bank_details")
+  taxInfo             Json?    @map("tax_info")
+  workingDays         Int[]    @default([1, 2, 3, 4, 5]) @map("working_days") @db.SmallInt
+  workingHours        Json?    @map("working_hours")
+  defaultLanguage     String   @default("ru") @map("default_language")
+  currency            String   @default("UZS")
+  timezone            String   @default("Asia/Tashkent")
+  receiptNumberFormat String   @default("R-{YYYY}-{SEQ:6}") @map("receipt_number_format")
+  paymentDueDay       Int      @default(5) @map("payment_due_day") @db.SmallInt
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy           String?  @map("updated_by") @db.Uuid
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("setting")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Tariff {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  branchId    String?       @map("branch_id") @db.Uuid
+  name        String
+  kind        String
+  amountTiyin BigInt        @map("amount_tiyin")
+  active      Boolean       @default(true)
+  createdBy   String?       @map("created_by") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  childTariff ChildTariff[]
+  branch      Branch?       @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("tariff")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model TelegramBinding {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  guardianId       String?   @map("guardian_id") @db.Uuid
+  userId           String?   @map("user_id") @db.Uuid
+  chatId           BigInt    @map("chat_id")
+  telegramUsername String?   @map("telegram_username")
+  language         String    @default("ru")
+  boundAt          DateTime  @default(now()) @map("bound_at") @db.Timestamptz(6)
+  unboundAt        DateTime? @map("unbound_at") @db.Timestamptz(6)
+  blockedBot       Boolean   @default(false) @map("blocked_bot")
+  guardian         Guardian? @relation(fields: [guardianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser          AppUser?  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("telegram_binding")
+}
+
+model TelegramLinkToken {
+  token      String    @id
+  tenantId   String    @map("tenant_id") @db.Uuid
+  guardianId String?   @map("guardian_id") @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt     DateTime? @map("used_at") @db.Timestamptz(6)
+  createdBy  String?   @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  guardian   Guardian? @relation(fields: [guardianId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser    AppUser?  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("telegram_link_token")
+}
+
+/// Not part of the provided 01-schema.sql — added for the self-service
+/// forgot-password flow, which the docs never specified a delivery
+/// channel for. Modeled identically to TelegramLinkToken (single-use,
+/// short-lived, one active token per user at a time).
+model PasswordResetToken {
+  token     String    @id
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser   AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@map("password_reset_token")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Tenant {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                 String                 @unique
+  name                 String
+  permissionsVersion   Int                    @default(1) @map("permissions_version")
+  status               String                 @default("active")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  accountingPeriod     AccountingPeriod[]
+  allergy              Allergy[]
+  announcement         Announcement[]
+  appUser              AppUser[]
+  attendanceCorrection AttendanceCorrection[]
+  attendanceDay        AttendanceDay[]
+  billingRules         BillingRules[]
+  billingRun           BillingRun[]
+  branch               Branch[]
+  charge               Charge[]
+  child                Child[]
+  childDocument        ChildDocument[]
+  childGroup           ChildGroup[]
+  childGuardian        ChildGuardian[]
+  childStatusHistory   ChildStatusHistory[]
+  childTariff          ChildTariff[]
+  consent              Consent[]
+  discount             Discount[]
+  documentTemplate     DocumentTemplate[]
+  expense              Expense[]
+  exportJob            ExportJob[]
+  featureFlag          FeatureFlag[]
+  file                 File[]
+  groupAssignment      GroupAssignment[]
+  groupStaff           GroupStaff[]
+  guardian             Guardian[]
+  healthIncident       HealthIncident[]
+  holiday              Holiday[]
+  importJob            ImportJob[]
+  lookupValue          LookupValue[]
+  medicalRecord        MedicalRecord[]
+  medication           Medication[]
+  notification         Notification[]
+  notificationTemplate NotificationTemplate[]
+  passwordResetToken   PasswordResetToken[]
+  payment              Payment[]
+  paymentAllocation    PaymentAllocation[]
+  pickupPermission     PickupPermission[]
+  pickupPerson         PickupPerson[]
+  role                 Role[]
+  setting              Setting?
+  tariff               Tariff[]
+  telegramBinding      TelegramBinding[]
+  telegramLinkToken    TelegramLinkToken[]
+  userSession          UserSession[]
+
+  @@map("tenant")
+}
+
+model UserBranch {
+  userId   String  @map("user_id") @db.Uuid
+  branchId String  @map("branch_id") @db.Uuid
+  branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser  AppUser @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, branchId])
+  @@map("user_branch")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model UserPermissionOverride {
+  userId        String     @map("user_id") @db.Uuid
+  permissionKey String     @map("permission_key")
+  scope         String     @default("all")
+  effect        String
+  reason        String
+  validUntil    DateTime?  @map("valid_until") @db.Timestamptz(6)
+  grantedBy     String     @map("granted_by") @db.Uuid
+  grantedAt     DateTime   @default(now()) @map("granted_at") @db.Timestamptz(6)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: NoAction, onUpdate: NoAction)
+  appUser       AppUser    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, permissionKey])
+  @@map("user_permission_override")
+}
+
+/// Fixed from the provided 01-schema.sql: branch_id was nullable
+/// ("NULL = all branches") but also part of the PRIMARY KEY, and Postgres
+/// forces every PK column NOT NULL regardless of how it was declared —
+/// the "all branches" case (and uq_user_role_allbranch, the partial index
+/// meant to enforce it) was unreachable dead code. Fix: a real surrogate
+/// `id` PK, branch_id genuinely nullable, and its uniqueness enforced by
+/// two constraints instead of one — a plain unique index for the
+/// non-null case (below) plus the pre-existing partial index for the
+/// null case (uq_user_role_allbranch, applied via raw SQL migration
+/// since Prisma can't express partial-unique constraints declaratively —
+/// same limitation as notification.dedup_key and consent's uq_consent).
+model UserRole {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  roleId    String    @map("role_id") @db.Uuid
+  branchId  String?   @map("branch_id") @db.Uuid
+  grantedBy String?   @map("granted_by") @db.Uuid
+  grantedAt DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  branch    Branch?   @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role      Role      @relation(fields: [roleId], references: [id], onUpdate: NoAction)
+  appUser   AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, roleId, branchId], map: "uq_user_role_branch")
+  @@map("user_role")
+}
+
+model UserSession {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address") @db.Inet
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appUser          AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("user_session")
+}

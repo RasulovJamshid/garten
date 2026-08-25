@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: kindergarten
+          POSTGRES_USER: kg_app
+          POSTGRES_PASSWORD: kg_app_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kg_app -d kindergarten"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://kg_app:kg_app_test_password@localhost:5432/kindergarten
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-bytes-long
+      APP_URL: http://localhost:3010
+      PORT: 3010
+      API_PREFIX: /api/v1
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_PATH: ./data/files
+      SEED_OWNER_EMAIL: owner@demo.local
+      SEED_OWNER_PASSWORD: ChangeMe12345!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pg-boss requires >=22.12.0 — same version the production
+      # Dockerfile uses, so CI catches anything Node-version-sensitive
+      # before a real deploy would.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint "{src,test}/**/*.ts"
+
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Seed (owner user + permission catalog + templates)
+        run: npm run seed
+
+      - name: E2e tests
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build
+
+      - name: Docker image build
+        run: docker build -t kindergarten-api:ci .

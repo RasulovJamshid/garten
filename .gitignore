@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*.local
+
+# data volumes / local artifacts
+/data/
+openapi.json
+
+# editor
+.vscode/
+.idea/
+
+# prisma
+prisma/*.db
