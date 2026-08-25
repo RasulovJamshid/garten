@@ -15,9 +15,12 @@ dashboard, admin, users, roles. Lint, type-check, build, unit tests, and e2e tes
 
 What's genuinely outstanding before this is a finished product, not just an API:
 
-- **No frontend.** This repo is backend-only — see `docs/frontend-functional-spec.md` and
-  `docs/frontend-integration-guide.md` for what a frontend build against this API needs to cover
-  (also packaged as `frontend-developer-handoff.zip` for handing to whoever builds it).
+- **No frontend yet.** This repo is backend-only. The client UI is a separate repo, deployed to
+  `alishaxkids.uz` on the same VPS while this API serves `api.alishaxkids.uz` — see
+  [`DEPLOYMENT.md`](DEPLOYMENT.md) §8 for how the two are wired together, and
+  `docs/frontend-functional-spec.md` / `docs/frontend-integration-guide.md` for what a frontend
+  build against this API needs to cover (also packaged as `frontend-developer-handoff.zip` for
+  handing to whoever builds it).
 - **Finance-path test coverage is thinner than `01-stage1-plan.md` §7 calls "non-negotiable."**
   Billing math has unit tests (`src/billing/*.spec.ts`); still missing: a tenant-isolation test
   (two seeded tenants, assert zero cross-tenant leakage), concurrent billing-run and

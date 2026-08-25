@@ -28,13 +28,19 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().default('/api/v1'),
+  // The API's OWN public base URL — https://api.<domain> in production,
+  // not the origin the browser loads the UI from. Sole consumer is the
+  // Telegram webhook URL (src/telegram/telegram-polling.service.ts).
   APP_URL: z.string().url(),
   // Explicit allow-list, never reflected wholesale: `credentials: true`
   // paired with a reflected/wildcard origin (main.ts previously did
   // `origin: true`) lets any website read authenticated responses using
   // the browser's ambient cookies — a real CORS hole, not a theoretical
-  // one. Defaults to APP_URL alone so a fresh deployment is closed by
-  // default rather than silently permissive.
+  // one. Falls back to APP_URL so a fresh deployment is closed by default
+  // rather than silently permissive — but that fallback is only *correct*
+  // when the UI is served from the same origin as the API, which it is
+  // not in production (UI on the apex domain, API on api.*). Set this
+  // explicitly there or every browser call fails preflight.
   CORS_ORIGINS: csv().optional(),
 
   DATABASE_URL: z.string().min(1),

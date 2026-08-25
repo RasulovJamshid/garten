@@ -127,6 +127,21 @@ export class AuthController {
     };
   }
 
+  /**
+   * The UI (apex domain) and this API (api.* subdomain) are different
+   * *origins* but the same *site* — they share a registrable domain — so
+   * `sameSite: 'lax'` is still sent on the UI's requests and stays the
+   * stronger choice. Two things follow, before anyone "fixes" this:
+   *
+   * - The browser client must use `credentials: 'include'`; cross-origin
+   *   fetch drops cookies by default. That, not this cookie, is the usual
+   *   cause of an unexplained 401 from POST /auth/refresh.
+   * - No `domain` attribute, deliberately. Host-only keeps the cookie on
+   *   the API host; widening it to `.<domain>` would hand it to every
+   *   future subdomain for nothing. If the UI ever moves to a *different*
+   *   registrable domain this has to become `sameSite: 'none'` — strictly
+   *   weaker, and a good reason not to move it.
+   */
   private setRefreshCookie(res: Response, value: string, expiresAt: Date): void {
     res.cookie(REFRESH_COOKIE, value, {
       httpOnly: true,

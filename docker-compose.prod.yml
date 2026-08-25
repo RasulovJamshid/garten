@@ -1,6 +1,6 @@
 # Production stack — kindergarten-docs/docs/01-stage1-plan.md §8:
 #   api + postgres + minio + caddy (TLS), plus a `backup` sidecar.
-# No `web` service yet — no frontend exists in this repo (see README).
+# The `web` service (client UI, separate repo) is profile-gated — see below.
 #
 # Usage on the VPS (see DEPLOYMENT.md for the full first-time walkthrough):
 #   cp .env.production.example .env.production   # then fill in real secrets
@@ -87,6 +87,28 @@ services:
       # baked into the image) or every redeploy would wipe uploaded files.
       - storage_data:/app/data/files
 
+  # Client UI (UI_DOMAIN). Built and published from its OWN repo as a
+  # static Vite/React bundle baked into an image that serves it on :80
+  # (nginx or caddy inside the image, including the SPA history fallback).
+  # Nothing is built here — this stack only runs the published image.
+  #
+  # Gated behind a compose profile because that image doesn't exist yet:
+  # without the profile, every `docker compose up -d` on the server would
+  # try to pull ${WEB_IMAGE} and fail the whole stack, API included. Once
+  # the frontend repo publishes its first image, set WEB_IMAGE and add
+  # `--profile web` to the compose commands (DEPLOYMENT.md §8).
+  #
+  # No env_file: the API base URL is baked into a static bundle at BUILD
+  # time (VITE_API_URL=https://<API_DOMAIN>), so runtime env does nothing
+  # for it. Changing the API host means rebuilding the web image.
+  web:
+    profiles: ['web']
+    image: ${WEB_IMAGE:-alishax-web:prod}
+    restart: unless-stopped
+    # No `ports:` — only caddy reaches it, as `web:80` on the internal network.
+    expose:
+      - '80'
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -94,10 +116,14 @@ services:
     ports:
       - '80:80'
       - '443:443'
+    # UI_DOMAIN / API_DOMAIN / ACME_EMAIL come from .env.production above
+    # and are substituted into the Caddyfile's site blocks at startup.
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Deliberately NOT `depends_on: web` — naming a profile-gated service
+    # here would pull it into every `up`, defeating the profile.
     depends_on:
       - api
 

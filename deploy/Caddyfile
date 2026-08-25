@@ -1,26 +1,48 @@
 # Caddy reverse proxy + automatic TLS (Let's Encrypt), per
 # kindergarten-docs/docs/01-stage1-plan.md §8's production stack.
 #
-# {$DOMAIN} and {$ACME_EMAIL} are substituted from the environment Caddy
-# is started with (docker-compose.prod.yml's `caddy` service reads them
-# from .env.production) — nothing to hand-edit here per deploy.
+# Two public hostnames, one server, one Caddy:
 #
-# DOMAIN must already resolve (A/AAAA record) to this server's public IP
-# before Caddy starts, or the ACME HTTP-01 challenge fails and it falls
-# back to plain HTTP. Check `docker compose logs caddy` if TLS doesn't
-# come up.
+#   {$UI_DOMAIN}   e.g. alishaxkids.uz      -> web:80    (static SPA, separate repo)
+#   {$API_DOMAIN}  e.g. api.alishaxkids.uz  -> api:3000  (this repo)
+#
+# Both are substituted from the environment Caddy is started with
+# (docker-compose.prod.yml's `caddy` service reads them from
+# .env.production) — nothing to hand-edit here per deploy. Caddy obtains
+# and renews a separate certificate for each hostname automatically.
+#
+# BOTH names must already resolve (A/AAAA record) to this server's public
+# IP before Caddy starts, or the ACME HTTP-01 challenge fails for whichever
+# one doesn't and that host falls back to plain HTTP. Check
+# `docker compose logs caddy` if TLS doesn't come up.
 
 {
 	email {$ACME_EMAIL}
 }
 
-{$DOMAIN} {
+# --- client UI --------------------------------------------------------
+# The SPA history fallback (serve /index.html for unknown paths) belongs
+# to the `web` image, not to this proxy — Caddy here only forwards. If the
+# root loads but deep links 404, that fallback is missing inside the web
+# container.
+#
+# Serves 502 until a `web` image exists and its compose profile is enabled
+# (see docker-compose.prod.yml). {$API_DOMAIN} is unaffected by that.
+{$UI_DOMAIN} {
 	encode gzip
 
-	# Everything is the API for now — there is no frontend service yet
-	# (see README "Status"). Once one exists, add a `handle` block here
-	# routing `/` to the `web` service and keep this proxying only
-	# {$API_PREFIX:/api/v1}/* and /docs.
+	reverse_proxy web:80
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# --- backend API ------------------------------------------------------
+{$API_DOMAIN} {
+	encode gzip
+
 	reverse_proxy api:3000
 
 	log {
@@ -28,3 +50,11 @@
 		format json
 	}
 }
+
+# --- optional: www -> apex redirect -----------------------------------
+# Uncomment ONLY after adding a `www` A record. Without one, Caddy retries
+# (and logs) a certificate order for a name that doesn't resolve.
+#
+# www.{$UI_DOMAIN} {
+# 	redir https://{$UI_DOMAIN}{uri} permanent
+# }

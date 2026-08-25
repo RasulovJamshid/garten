@@ -161,4 +161,4 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         run: |
           sleep 10
-          curl -fsS "https://${{ vars.DOMAIN }}${{ vars.API_PREFIX || '/api/v1' }}/health"
+          curl -fsS "https://${{ vars.API_DOMAIN }}${{ vars.API_PREFIX || '/api/v1' }}/health"

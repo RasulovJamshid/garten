@@ -5,17 +5,27 @@ One VPS, Docker Compose, Caddy for automatic TLS — per
 Kubernetes, no managed services. This doc is the checklist from "empty VPS" to "CI/CD deploys on
 every push to `main`."
 
-There is no `web` (frontend) service yet — this deploys the API only. See the README "Status"
-section for where the frontend stands.
+Two hostnames, one server, one Caddy:
+
+| Hostname | Serves | Container |
+|---|---|---|
+| `alishaxkids.uz` | client UI (static SPA) | `web:80` — built and published from its **own repo** |
+| `api.alishaxkids.uz` | this backend API | `api:3000` |
+
+The `web` service sits behind a Compose profile and stays off until that image exists (§8), so
+everything below deploys the API alone — `alishaxkids.uz` returns 502 until then, which does not
+affect the API host.
 
 ---
 
 ## 0. What you need before starting
 
 - A VPS (2 GB RAM minimum; Ubuntu 22.04/24.04 assumed below) with a public IP.
-- A domain name, with an **A record pointing at that IP** (and AAAA if you have IPv6). Caddy
-  cannot get a TLS certificate until this resolves — DNS propagation can take a few minutes to a
-  few hours.
+- A domain name with **two A records pointing at that IP** — the apex (`alishaxkids.uz`) for the
+  client UI and `api.alishaxkids.uz` for this API (plus AAAA records if you have IPv6). Caddy
+  requests a separate certificate per hostname and cannot get one until that name resolves — DNS
+  propagation can take a few minutes to a few hours. A missing record for one host does not stop
+  the other from getting its certificate.
 - A GitHub repository for this code (push the local git history you already have to it).
 - Nothing else. No Redis, no separate object-storage account — MinIO runs on the same VPS.
 
@@ -67,7 +77,10 @@ bash scripts/generate-prod-secrets.sh .env.production
 
 Then hand-edit `.env.production` for what the generator deliberately leaves alone:
 
-- `DOMAIN` / `ACME_EMAIL` / `APP_URL` / `CORS_ORIGINS` — your real domain.
+- `UI_DOMAIN` / `API_DOMAIN` / `ACME_EMAIL` — your real hostnames.
+- `APP_URL` must be the **API** host (`https://api.alishaxkids.uz`) and `CORS_ORIGINS` the **UI**
+  origin (`https://alishaxkids.uz`). These are no longer the same value: swapping them breaks the
+  Telegram webhook in one direction and every browser call in the other.
 - `SEED_TENANT_CODE`, `SEED_TENANT_NAME`, `SEED_OWNER_EMAIL` — the real first tenant.
 - `--- telegram` block, if you're turning the bot on now rather than later.
 - `SENTRY_DSN`, if you want error aggregation from day one (recommended).
@@ -87,7 +100,7 @@ docker compose -f docker-compose.prod.yml logs -f caddy   # watch for the TLS ce
 Once Caddy logs show the certificate obtained, verify:
 
 ```bash
-curl -fsS https://<your-domain>/api/v1/health
+curl -fsS https://api.alishaxkids.uz/api/v1/health
 # {"status":"ok","timestamp":"..."}
 ```
 
@@ -119,7 +132,7 @@ And these repo **variables** (not secrets — not sensitive, just non-default):
 
 | Variable | Value |
 |---|---|
-| `DOMAIN` | your domain (used only for the post-deploy smoke test) |
+| `API_DOMAIN` | `api.alishaxkids.uz` — used only for the post-deploy smoke test |
 
 GHCR needs no separate credential — the workflow authenticates with the automatic
 `GITHUB_TOKEN`. The image it pushes is `ghcr.io/<owner>/<repo>` and defaults to **private**;
@@ -179,3 +192,51 @@ means an application bug has more privilege than it should against the ledger ta
 means a second `MIGRATE_DATABASE_URL` (superuser or owner role) used only by the `prisma migrate
 deploy` step, and revoking `UPDATE`/`DELETE` from `kg_app` on the four ledger tables. Worth doing
 before this handles real money at scale; not done as part of this pass.
+
+## 8. Adding the client UI (`alishaxkids.uz`)
+
+The frontend lives in its own repository and is deployed as a published image, not built here.
+This repo owns only the routing and the Compose entry for it.
+
+**What the frontend repo must produce:** an image that serves the built static bundle on port 80
+and does its own SPA history fallback (unknown paths → `index.html`). Caddy here only forwards;
+if the root page loads but deep links 404, that fallback is missing inside the web image, not in
+`deploy/Caddyfile`.
+
+**The API base URL is baked in at build time.** A Vite bundle is static files — there is no
+runtime env to read — so the frontend's CI must build with:
+
+```
+VITE_API_URL=https://api.alishaxkids.uz
+```
+
+An image built against a different value cannot be repointed by editing `.env.production`; it has
+to be rebuilt. Same for any other `VITE_*` value.
+
+**Turning it on**, once the frontend repo has pushed its first image to GHCR:
+
+```bash
+# in .env.production, uncomment and set:
+#   WEB_IMAGE=ghcr.io/<owner>/<web-repo>:latest
+
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile web pull web
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile web up -d
+```
+
+The `--profile web` flag is required on **every** compose command that should include the UI —
+without it the `web` service is skipped entirely. That is deliberate: it means a missing or
+unpullable web image can never take the API down with it. If you'd rather not repeat the flag,
+export `COMPOSE_PROFILES=web` in the deploy user's shell profile.
+
+**CD for the UI** belongs in the frontend repo's own workflow: build → push to GHCR → SSH to this
+server → the two commands above. It should *not* be bolted onto this repo's `deploy` job — the
+two deploy on different cadences, and coupling them means a frontend typo blocks an API hotfix.
+
+**Cross-origin checklist**, if the UI loads but calls fail:
+
+| Symptom | Cause |
+|---|---|
+| Preflight fails / "not allowed by CORS" | `CORS_ORIGINS` isn't exactly `https://alishaxkids.uz` (scheme and no trailing slash both matter) |
+| 401 from `POST /auth/refresh`, login "forgets" | the client isn't sending `credentials: 'include'` |
+| Telegram webhook never fires | `APP_URL` points at the UI host instead of `api.alishaxkids.uz` |
+| `alishaxkids.uz` returns 502 | `web` isn't running — missing `--profile web` or `WEB_IMAGE` unset |
