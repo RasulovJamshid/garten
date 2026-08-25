@@ -1,0 +1,14 @@
+# Installed at /etc/cron.d/kg-backup — per kindergarten-docs/docs/06-ops-reference.md §6:
+#   nightly 02:00 full encrypted dump; freshness re-checked at 04:30 so a
+#   silent failure (the "classic disaster" per that doc) shows up in
+#   `docker compose logs backup` and can be wired into external alerting.
+# Times are in the container's TZ (set via the TZ env var — defaults to
+# Asia/Tashkent in docker-compose.prod.yml, matching DEFAULT_TIMEZONE).
+#
+# Output goes to the container's own stdout/stderr (PID 1's fds) so it
+# shows up under `docker compose logs backup` instead of disappearing into
+# a file inside the container.
+
+0 2 * * * root . /etc/container-env; /app/scripts/backup.sh >>/proc/1/fd/1 2>>/proc/1/fd/2
+
+30 4 * * * root . /etc/container-env; /app/scripts/check-backup-freshness.sh >>/proc/1/fd/1 2>>/proc/1/fd/2

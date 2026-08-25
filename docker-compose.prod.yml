@@ -1,0 +1,136 @@
+# Production stack — kindergarten-docs/docs/01-stage1-plan.md §8:
+#   api + postgres + minio + caddy (TLS), plus a `backup` sidecar.
+# No `web` service yet — no frontend exists in this repo (see README).
+#
+# Usage on the VPS (see DEPLOYMENT.md for the full first-time walkthrough):
+#   cp .env.production.example .env.production   # then fill in real secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production build api backup
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# The CD workflow (.github/workflows/ci.yml) instead builds the `api` image
+# in CI, pushes it to GHCR, and on the server just does:
+#   API_IMAGE=ghcr.io/<owner>/<repo>:sha-xxxxx \
+#     docker compose -f docker-compose.prod.yml --env-file .env.production pull api
+#   API_IMAGE=ghcr.io/<owner>/<repo>:sha-xxxxx \
+#     docker compose -f docker-compose.prod.yml --env-file .env.production up -d api
+#
+# `--env-file .env.production` is what makes docker-compose itself resolve
+# ${POSTGRES_PASSWORD} etc. below; `env_file:` on each service is the
+# separate mechanism that hands the *whole* file to that container's
+# process env (what the app/backup scripts actually read).
+
+name: kindergarten-prod
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kindergarten}
+      POSTGRES_USER: ${POSTGRES_USER:-kg_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.production}
+    # No `ports:` — not reachable from outside the compose network. Only
+    # `api` and `backup` talk to it, over the internal network, by
+    # service name (`postgres:5432`, which is what DATABASE_URL in
+    # .env.production.example points at).
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-kg_app} -d $${POSTGRES_DB:-kindergarten}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    env_file: .env.production
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set in .env.production}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set in .env.production}
+    # Only used when STORAGE_DRIVER=s3 (see .env.production.example — the
+    # ops doc recommends starting with STORAGE_DRIVER=local for a single
+    # app container, which this stack is). Harmless to leave running
+    # either way. Object port stays internal-only (`minio:9000`, reached
+    # by `api`); console is bound to localhost only — reach it via
+    # `ssh -L 9001:localhost:9001 <server>` rather than exposing it publicly.
+    ports:
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${API_IMAGE:-kindergarten-api:prod}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      TZ: ${DEFAULT_TIMEZONE:-Asia/Tashkent}
+    expose:
+      - '3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      # Only exercised when STORAGE_DRIVER=local. Must be a volume (not
+      # baked into the image) or every redeploy would wipe uploaded files.
+      - storage_data:/app/data/files
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env.production
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  backup:
+    build:
+      context: .
+      dockerfile: deploy/backup/Dockerfile
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      TZ: ${DEFAULT_TIMEZONE:-Asia/Tashkent}
+      # Overrides the value in .env.production so the same file works for
+      # both `api` (reads local files at /app/data/files, same path) and
+      # `backup` (archives that path read-only). DATABASE_URL, BACKUP_DIR,
+      # STORAGE_DRIVER, BACKUP_GPG_* all come through as-is from the file.
+      STORAGE_LOCAL_PATH: /app/data/files
+    volumes:
+      - backup_data:/backup
+      - storage_data:/app/data/files:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  minio_data:
+  storage_data:
+  caddy_data:
+  caddy_config:
+  # Backups live in a named volume by default so they survive container
+  # recreation — but per ops-reference §6, "a backup on the same disk as
+  # the database protects against nothing that actually happens." Sync
+  # this off-server (rclone/rsync/etc. to somewhere else). See
+  # DEPLOYMENT.md for a starting point; this compose file only produces
+  # the backups, it doesn't ship them anywhere.
+  backup_data:

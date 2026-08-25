@@ -4,41 +4,36 @@ Stage 1 backend API. Built against the spec in [`kindergarten-docs/`](kindergart
 first, especially `docs/01-stage1-plan.md` (locked decisions) and `docs/06-ops-reference.md` (error
 codes, env config, ops runbooks).
 
-## Status: foundation (weeks 2–5 of the plan)
+## Status: backend feature-complete, pre-launch hardening in progress
 
-What's implemented and working end-to-end:
+Every domain module in the plan is implemented: auth, dynamic RBAC (including the §5.5 safety
+rails — self-lockout, last-owner, privilege-escalation, sensitive-permission gating), children,
+guardians, groups, attendance, pickup, billing, payments, debts, expenses, notifications,
+telegram, reports, imports, files/storage (local + S3/MinIO drivers), pg-boss jobs, audit log,
+dashboard, admin, users, roles. Lint, type-check, build, unit tests, and e2e tests are all green
+(`npm test`, `npm run test:e2e`).
 
-- **Database**: the verified schema (`kindergarten-docs/sql/*.sql`) applied as a Prisma baseline
-  migration. 52 tables (see note below), introspected and reformatted to idiomatic
-  camelCase/PascalCase with `@map`/`@@map` back to the original snake_case columns.
-- **Tenant seam**: `TenantPrisma` (request-scoped, tenant filter forced via a Prisma client
-  extension) is the only DB handle domain modules may inject. Enforced by an ESLint rule
-  (`no-restricted-imports` override) banning raw `PrismaService` outside `auth/`, `prisma/`,
-  `rbac/`, and `health/`.
-- **Auth**: login / refresh / logout with rotating opaque refresh tokens (httpOnly cookie, hashed
-  at rest), JWT access tokens (15 min), argon2id password hashing, account lockout after repeated
-  failures.
-- **Dynamic RBAC**: permission catalog in code (`src/rbac/permission-catalog.ts`), synced to the DB
-  on boot; role → permission grants and user → role assignments live in the DB; a versioned
-  in-memory cache (`tenant.permissionsVersion`) so edits take effect on the next request with no
-  Redis and no re-login. `ScopeService` turns a granted scope (`all` / `branch` / `own_group` /
-  `today` / `self`) into a Prisma `where` filter.
-- **Audit log**: append-only service, `GET /audit` + `GET /audit/:id` (Owner/Director only).
-- **Swagger/OpenAPI**: served at `/docs`, regenerated to `openapi.json` on every boot.
-- **Seed data**: one tenant, one branch, the 7 system roles from the spec with sensible default
-  grants, and an Owner login.
+What's genuinely outstanding before this is a finished product, not just an API:
 
-What's **not** built yet — this is scaffolding, not the product:
+- **No frontend.** This repo is backend-only — see `docs/frontend-functional-spec.md` and
+  `docs/frontend-integration-guide.md` for what a frontend build against this API needs to cover
+  (also packaged as `frontend-developer-handoff.zip` for handing to whoever builds it).
+- **Finance-path test coverage is thinner than `01-stage1-plan.md` §7 calls "non-negotiable."**
+  Billing math has unit tests (`src/billing/*.spec.ts`); still missing: a tenant-isolation test
+  (two seeded tenants, assert zero cross-tenant leakage), concurrent billing-run and
+  concurrent-payment-allocation race tests, self-lockout/last-owner/privilege-escalation e2e
+  coverage, period-close rejection, discount stacking, and proration. Do not treat the finance
+  path as fully proven until these exist.
+- **DB privilege separation** (`06-ops-reference.md` §3: runtime user restricted to
+  `SELECT/INSERT`-only on ledger tables, migrations run as a separate more-privileged role) isn't
+  implemented yet — see `DEPLOYMENT.md` §7 for the exact gap.
 
-- No domain modules: children, guardians, groups, attendance, pickup, tariffs/billing, payments,
-  debts, notifications, reports, expenses, imports, files. These are weeks 6–20 of the plan.
-- No role/user management API (`POST /roles`, `POST /users/:id/roles`, etc.) or the RBAC safety
-  rails from §5.5 (self-lockout, last-owner, privilege-escalation checks) — the *mechanics* those
-  rails protect (guard, resolver, cache) are built, but the endpoints that would let someone trip
-  them don't exist yet.
-- No storage/files module (MinIO driver exists as reference in `kindergarten-docs/src/storage.ts`,
-  not yet wired in).
-- No Telegram integration, no pg-boss job queue.
+## Production deployment
+
+`DEPLOYMENT.md` has the full VPS-to-CI/CD walkthrough: `docker-compose.prod.yml` (api + postgres
++ minio + Caddy with automatic TLS + a nightly-backup sidecar) and the GitHub Actions `deploy`
+job in `.github/workflows/ci.yml` that builds, publishes to GHCR, and SSH-deploys on every push
+to `main`.
 
 ## Known issue inherited from the delivered schema
 
@@ -56,7 +51,7 @@ produces 52 tables (confirmed by direct introspection) and 28 rows in
 likely just 14 actual `CREATE TRIGGER` statements counted differently — not investigated further).
 Neither discrepancy blocked anything; noting it in case it matters later.
 
-## Running it
+## Local development
 
 ```bash
 docker compose up -d postgres minio       # Postgres on 5433, MinIO on 9000/9001

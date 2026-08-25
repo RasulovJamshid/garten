@@ -4,6 +4,11 @@ coverage/
 *.log
 .env
 .env.*.local
+# Every real env file except the checked-in templates — catches
+# .env.production, .env.staging, etc. without an allowlist gap.
+.env.*
+!.env.example
+!.env.production.example
 
 # data volumes / local artifacts
 /data/

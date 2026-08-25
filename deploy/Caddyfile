@@ -1,0 +1,30 @@
+# Caddy reverse proxy + automatic TLS (Let's Encrypt), per
+# kindergarten-docs/docs/01-stage1-plan.md §8's production stack.
+#
+# {$DOMAIN} and {$ACME_EMAIL} are substituted from the environment Caddy
+# is started with (docker-compose.prod.yml's `caddy` service reads them
+# from .env.production) — nothing to hand-edit here per deploy.
+#
+# DOMAIN must already resolve (A/AAAA record) to this server's public IP
+# before Caddy starts, or the ACME HTTP-01 challenge fails and it falls
+# back to plain HTTP. Check `docker compose logs caddy` if TLS doesn't
+# come up.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	# Everything is the API for now — there is no frontend service yet
+	# (see README "Status"). Once one exists, add a `handle` block here
+	# routing `/` to the `web` service and keep this proxying only
+	# {$API_PREFIX:/api/v1}/* and /docs.
+	reverse_proxy api:3000
+
+	log {
+		output stdout
+		format json
+	}
+}
