@@ -11,6 +11,18 @@ import { AppConfigService } from '../../src/config/app-config.service';
  * database in this project's Stage 1 setup). Mirrors main.ts's global
  * pipe/middleware wiring exactly, minus Swagger/Sentry, which have
  * nothing to do with request behavior under test.
+ *
+ * Every *.e2e-spec.ts file shares this ONE database — there is no
+ * per-file/per-worker isolation. That's why `npm run test:e2e` passes
+ * `--runInBand`: Jest's default parallel workers let one file's writes
+ * bleed into another's assumptions. Concretely, auth.e2e-spec.ts's
+ * forgot/reset/login cycle briefly makes OWNER_PASSWORD genuinely wrong
+ * before restoring it — any other suite's `login(OWNER_LOGIN,
+ * OWNER_PASSWORD)` landing inside that window gets a real 401, not a bug
+ * in the app (confirmed while adding this comment: with default
+ * parallelism, growing the suite from 5 files to 9 was enough to make
+ * that collision reproducible). Keep new suites running serially unless
+ * you've made them tolerant of this.
  */
 export async function createTestApp(): Promise<{ app: INestApplication; prefix: string }> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

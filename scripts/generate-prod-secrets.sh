@@ -9,7 +9,7 @@
 #   cp .env.production.example .env.production
 #   scripts/generate-prod-secrets.sh .env.production
 #
-# Does NOT touch DOMAIN, ACME_EMAIL, SEED_TENANT_*, SEED_OWNER_EMAIL, or
+# Does NOT touch UI_DOMAIN, API_DOMAIN, ACME_EMAIL, SEED_TENANT_*, SEED_OWNER_EMAIL, or
 # anything under --- telegram / --- observability — those need real
 # values you have to supply, not random ones. The script prints what
 # still needs hand-filling when it's done.

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
@@ -189,41 +190,60 @@ export class BillingRunsService {
     const total = lines.reduce((acc, l) => acc + BigInt(l.amountTiyin), 0n);
     const childCount = new Set(lines.map((l) => l.childId)).size;
 
-    await this.tenantPrisma.db.$transaction(async (tx) => {
-      for (const line of lines) {
-        const tariff = await tx.tariff.findUnique({ where: { id: line.tariffId } });
-        await tx.charge.create({
+    // No explicit row lock on `run` here (unlike payments.service.ts's
+    // FIFO allocator) — the backstop is the DB itself: uq_charge_once
+    // (one non-manual charge per tenant/child/period/kind) and
+    // uq_billing_run_committed (one committed run per tenant/period) both
+    // make a second, concurrent commit of the same preview fail at the
+    // database layer. Caught below and turned into a clean 409 — without
+    // this catch, a genuinely legitimate race (two staff members
+    // committing at the same moment) surfaced as an unhandled 500
+    // (confirmed while adding the concurrency e2e coverage; see
+    // test/billing-concurrency.e2e-spec.ts).
+    try {
+      await this.tenantPrisma.db.$transaction(async (tx) => {
+        for (const line of lines) {
+          const tariff = await tx.tariff.findUnique({ where: { id: line.tariffId } });
+          await tx.charge.create({
+            data: {
+              tenantId: this.tenantPrisma.tenantId,
+              branchId:
+                tariff!.branchId ??
+                (await tx.child.findUnique({ where: { id: line.childId } }))!.branchId,
+              childId: line.childId,
+              periodId: run.periodId,
+              billingRunId: run.id,
+              billingRulesId: rulesRow.id,
+              kind: line.kind,
+              amountTiyin: BigInt(line.amountTiyin),
+              sign: 1,
+              tariffSnapshot: tariff as any,
+              calculationTrace: line.trace as any,
+              dueDate,
+              createdBy: ctx.userId,
+            },
+          });
+        }
+
+        await tx.billingRun.update({
+          where: { id },
           data: {
-            tenantId: this.tenantPrisma.tenantId,
-            branchId:
-              tariff!.branchId ??
-              (await tx.child.findUnique({ where: { id: line.childId } }))!.branchId,
-            childId: line.childId,
-            periodId: run.periodId,
-            billingRunId: run.id,
-            billingRulesId: rulesRow.id,
-            kind: line.kind,
-            amountTiyin: BigInt(line.amountTiyin),
-            sign: 1,
-            tariffSnapshot: tariff as any,
-            calculationTrace: line.trace as any,
-            dueDate,
-            createdBy: ctx.userId,
+            status: 'committed',
+            committedAt: new Date(),
+            idempotencyKey,
+            totalTiyin: total,
+            childCount,
           },
         });
-      }
-
-      await tx.billingRun.update({
-        where: { id },
-        data: {
-          status: 'committed',
-          committedAt: new Date(),
-          idempotencyKey,
-          totalTiyin: total,
-          childCount,
-        },
       });
-    });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw AppErrors.conflict(
+          'CONCURRENT_COMMIT: this billing run was committed by a concurrent request',
+        );
+      }
+      throw e;
+    }
 
     await this.audit.log({
       userId: ctx.userId,

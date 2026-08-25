@@ -66,44 +66,68 @@ export class PaymentsService {
     const amountTiyin = BigInt(dto.amountTiyin);
     const tenantId = this.tenantPrisma.tenantId;
 
-    const payment = await this.tenantPrisma.db.$transaction(
-      async (tx) => {
-        const created = await tx.payment.create({
-          data: {
-            tenantId,
-            branchId: child.branchId,
-            childId: dto.childId,
-            payerGuardianId: dto.payerGuardianId,
-            amountTiyin,
-            sign: 1,
-            method: dto.method,
-            receiptNo: dto.receiptNo,
-            bankRef: dto.bankRef,
-            paidAt: new Date(dto.paidAt),
-            attachmentFileId: dto.attachmentFileId,
-            note: dto.note,
-            idempotencyKey,
-            recordedBy: ctx.userId,
-          },
-        });
+    let payment;
+    try {
+      payment = await this.tenantPrisma.db.$transaction(
+        async (tx) => {
+          const created = await tx.payment.create({
+            data: {
+              tenantId,
+              branchId: child.branchId,
+              childId: dto.childId,
+              payerGuardianId: dto.payerGuardianId,
+              amountTiyin,
+              sign: 1,
+              method: dto.method,
+              receiptNo: dto.receiptNo,
+              bankRef: dto.bankRef,
+              paidAt: new Date(dto.paidAt),
+              attachmentFileId: dto.attachmentFileId,
+              note: dto.note,
+              idempotencyKey,
+              recordedBy: ctx.userId,
+            },
+          });
 
-        if (dto.allocations && dto.allocations.length > 0) {
-          await this.allocateManual(
-            tx,
-            tenantId,
-            created.id,
-            dto.childId,
-            amountTiyin,
-            dto.allocations,
-          );
-        } else {
-          await this.allocateFifo(tx, tenantId, created.id, dto.childId, amountTiyin);
-        }
+          if (dto.allocations && dto.allocations.length > 0) {
+            await this.allocateManual(
+              tx,
+              tenantId,
+              created.id,
+              dto.childId,
+              amountTiyin,
+              dto.allocations,
+            );
+          } else {
+            await this.allocateFifo(tx, tenantId, created.id, dto.childId, amountTiyin);
+          }
 
-        return created;
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+          return created;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (e) {
+      // SERIALIZABLE + the charge-row FOR UPDATE lock (allocateFifo /
+      // allocateManual above) is what stops two concurrent payments from
+      // both allocating against the same charge — but Postgres enforces
+      // that by aborting the LOSING transaction with a serialization
+      // failure (P2034) rather than making it wait for a safe answer.
+      // Uncaught, that surfaced as an unhandled 500 for a perfectly
+      // legitimate race (two staff recording payments for the same child
+      // at once — confirmed while adding
+      // test/billing-concurrency.e2e-spec.ts). The client's own retry of
+      // the same request is safe: `idempotencyKey` is still unused since
+      // this transaction never committed.
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        (e.code === 'P2034' || e.code === 'P2002')
+      ) {
+        throw AppErrors.conflict(
+          'CONCURRENT_PAYMENT: a concurrent payment for this child is being processed, please retry',
+        );
+      }
+      throw e;
+    }
 
     await this.audit.log({
       userId: ctx.userId,
