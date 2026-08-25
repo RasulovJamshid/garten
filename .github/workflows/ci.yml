@@ -72,7 +72,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Only needed on PRs — on a push to main, docker-publish (below)
+      # builds the same Dockerfile for real (and pushes it), so building
+      # it again here would just double the minutes for no extra coverage.
       - name: Docker image build
+        if: github.event_name == 'pull_request'
         run: docker build -t kindergarten-api:ci .
 
   # Builds the real production image and pushes it to GHCR. Only runs for
