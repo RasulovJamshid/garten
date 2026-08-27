@@ -42,6 +42,15 @@ export const envSchema = z.object({
   // not in production (UI on the apex domain, API on api.*). Set this
   // explicitly there or every browser call fails preflight.
   CORS_ORIGINS: csv().optional(),
+  // Escape hatch for testing (Swagger's "Try it out", served from
+  // api.<domain> itself — its own origin isn't on CORS_ORIGINS by design —
+  // or ad-hoc debugging) where wiring up CORS_ORIGINS correctly is more
+  // friction than it's worth right now. TRUE REFLECTS EVERY ORIGIN WITH
+  // CREDENTIALS — exactly the hole the CORS_ORIGINS comment above warns
+  // about; main.ts logs a loud warning on every boot while this is true.
+  // Default false. Turn this off again once you're done testing — do not
+  // leave it true once real user traffic exists.
+  CORS_DISABLED: boolString(false),
 
   DATABASE_URL: z.string().min(1),
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(20),

@@ -17,20 +17,35 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
 
-  // Explicit allow-list — `credentials: true` with a reflected/wildcard
-  // origin would let any site read authenticated responses via the
-  // browser's ambient cookies (see env.schema.ts CORS_ORIGINS comment).
-  const allowedOrigins = new Set(config.get('CORS_ORIGINS') ?? [config.get('APP_URL')]);
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin "${origin}" is not allowed by CORS`));
-      }
-    },
-    credentials: true,
-  });
+  // CORS_DISABLED is a temporary testing escape hatch (see env.schema.ts) —
+  // reflects every origin with credentials, which is the exact hole the
+  // allow-list below exists to prevent. Loud warning on every boot so it's
+  // never silently left on.
+  if (config.get('CORS_DISABLED')) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      'CORS_DISABLED=true — every browser origin is allowed, with credentials. ' +
+        'Any site can read authenticated responses via ambient cookies while this ' +
+        'is set. Testing-only: set CORS_DISABLED=false (or unset it) before this ' +
+        'handles real user traffic.',
+    );
+    app.enableCors({ origin: true, credentials: true });
+  } else {
+    // Explicit allow-list — `credentials: true` with a reflected/wildcard
+    // origin would let any site read authenticated responses via the
+    // browser's ambient cookies (see env.schema.ts CORS_ORIGINS comment).
+    const allowedOrigins = new Set(config.get('CORS_ORIGINS') ?? [config.get('APP_URL')]);
+    app.enableCors({
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.has(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Origin "${origin}" is not allowed by CORS`));
+        }
+      },
+      credentials: true,
+    });
+  }
   app.setGlobalPrefix(config.get('API_PREFIX').replace(/^\//, ''));
   app.useGlobalPipes(
     new ValidationPipe({
