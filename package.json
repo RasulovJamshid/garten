@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Kindergarten Management System — backend API (Stage 1)",
   "private": true,
+  "type": "commonjs",
   "license": "UNLICENSED",
   "scripts": {
     "postinstall": "prisma generate",
