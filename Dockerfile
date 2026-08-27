@@ -42,6 +42,17 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 
+# `npm run seed` runs prisma/seed.ts through ts-node (tsconfig.build.json
+# deliberately excludes `prisma/` from `nest build`, so there is no
+# compiled dist/seed.js to run instead) and seed.ts imports
+# src/rbac/permission-catalog.ts directly — so ts-node needs the real TS
+# source tree at runtime, not just dist/. Omitting this makes `docker
+# compose exec api npm run seed` fail with "Cannot find module
+# '../src/rbac/permission-catalog'" the first time anyone actually runs
+# it against this image. ts-node/typescript themselves are devDependencies,
+# already covered by the full node_modules copy above.
+COPY --from=build /app/src ./src
+
 # Only the local-storage write target needs the app user's ownership —
 # recursively chowning all of node_modules (976 packages) cost 2.5+
 # minutes for zero benefit, since the app process only ever reads there.
