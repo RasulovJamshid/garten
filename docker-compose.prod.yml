@@ -1,6 +1,9 @@
 # Production stack — kindergarten-docs/docs/01-stage1-plan.md §8:
-#   api + postgres + minio + caddy (TLS), plus a `backup` sidecar.
-# The `web` service (client UI, separate repo) is profile-gated — see below.
+#   api + postgres + caddy (TLS), plus a `backup` sidecar.
+# Two services are profile-gated (off by default, need an explicit
+# `--profile <name>` to start): `web` (client UI, separate repo — see
+# below) and `minio` (only needed when STORAGE_DRIVER=s3 — see its
+# comment below, including a real CPU-compatibility gotcha on some hosts).
 #
 # Usage on the VPS (see DEPLOYMENT.md for the full first-time walkthrough):
 #   cp .env.production.example .env.production   # then fill in real secrets
@@ -42,7 +45,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # Only used when STORAGE_DRIVER=s3 (see .env.production.example — the
+  # ops doc recommends starting with STORAGE_DRIVER=local for a single
+  # app container, which this stack is). Profile-gated: `up -d` never
+  # starts this unless you pass `--profile s3`, and `api` below has no
+  # dependency on it — with STORAGE_DRIVER=local the app never touches it
+  # (src/storage/storage.module.ts only constructs an S3 client when the
+  # driver is 's3'), so there is nothing to wait on.
+  #
+  # Do NOT assume this is "harmless to leave running either way" — the
+  # official minio/minio image is compiled requiring the x86-64-v2 CPU
+  # instruction set, and plenty of budget KVM VPS hosts present a virtual
+  # CPU that doesn't expose it (no full host passthrough). On such a host
+  # this container crash-loops with "Fatal glibc error: CPU does not
+  # support x86-64-v2" — and because `api` used to hard-depend on it being
+  # healthy, that took the whole stack down even when storage was 'local'
+  # and nothing needed MinIO at all. If you do need S3/MinIO on such a
+  # host: check `lscpu | grep Flags` for `sse4_2`/`popcnt`, ask the
+  # provider for host CPU passthrough, or pin an older minio/minio tag
+  # predating that build requirement.
   minio:
+    profiles: ['s3']
     image: minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -50,11 +73,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set in .env.production}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set in .env.production}
-    # Only used when STORAGE_DRIVER=s3 (see .env.production.example — the
-    # ops doc recommends starting with STORAGE_DRIVER=local for a single
-    # app container, which this stack is). Harmless to leave running
-    # either way. Object port stays internal-only (`minio:9000`, reached
-    # by `api`); console is bound to localhost only — reach it via
+    # Object port stays internal-only (`minio:9000`, reached by `api`);
+    # console is bound to localhost only — reach it via
     # `ssh -L 9001:localhost:9001 <server>` rather than exposing it publicly.
     ports:
       - '127.0.0.1:9001:9001'
@@ -80,8 +100,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      # Deliberately NOT depending on `minio` — it's profile-gated (see its
+      # comment above) and Compose errors on `up` if a service depends on
+      # one excluded by profiles. With STORAGE_DRIVER=s3, start `minio`
+      # first yourself (`--profile s3 up -d minio`, wait healthy, then
+      # `up -d api`) since nothing here orders them for you.
     volumes:
       # Only exercised when STORAGE_DRIVER=local. Must be a volume (not
       # baked into the image) or every redeploy would wipe uploaded files.

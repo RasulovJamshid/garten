@@ -27,7 +27,10 @@ affect the API host.
   propagation can take a few minutes to a few hours. A missing record for one host does not stop
   the other from getting its certificate.
 - A GitHub repository for this code (push the local git history you already have to it).
-- Nothing else. No Redis, no separate object-storage account — MinIO runs on the same VPS.
+- Nothing else. No Redis, no separate object-storage account needed — the default
+  `STORAGE_DRIVER=local` writes uploads to a volume on this same VPS. MinIO is optional (only
+  needed for `STORAGE_DRIVER=s3`, e.g. once you're running 2+ api containers) and its compose
+  service is profile-gated off by default — see the callout in step 3.
 
 ---
 
@@ -91,10 +94,25 @@ you ever run `git add`.
 
 ## 3. First boot (manual — before CI/CD exists)
 
+> **Every** `docker compose` command against this file needs `--env-file .env.production` —
+> Compose silently falls back to a default `.env` (which doesn't exist here) without it, and every
+> `${VAR:?...}` comes back "missing a value" even though `.env.production` is filled in correctly.
+> Save yourself the confusion with `alias dcprod='docker compose -f docker-compose.prod.yml
+> --env-file .env.production'` and use `dcprod` from here on.
+>
+> Plain `up -d` (no `--profile` flag) starts only `postgres`, `api`, `backup`, `caddy` —
+> **not** `minio`. That's deliberate: with the default `STORAGE_DRIVER=local` the app never talks
+> to MinIO (see `src/storage/storage.module.ts`), so it isn't started at all. Only add
+> `--profile s3` if you've actually switched `STORAGE_DRIVER=s3` — and be aware the official
+> `minio/minio` image requires the `x86-64-v2` CPU feature set; on a VPS whose hypervisor doesn't
+> expose it (check `lscpu | grep Flags` for `sse4_2`/`popcnt`) it crash-loops with `Fatal glibc
+> error: CPU does not support x86-64-v2` and no config change fixes that short of a different host
+> or an older pinned MinIO tag.
+
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production build api backup
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-docker compose -f docker-compose.prod.yml logs -f caddy   # watch for the TLS cert being issued
+dcprod build api backup
+dcprod up -d
+dcprod logs -f caddy   # watch for the TLS cert being issued
 ```
 
 Once Caddy logs show the certificate obtained, verify:
