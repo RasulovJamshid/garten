@@ -7,7 +7,7 @@ import {
   Post,
   Body,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { timingSafeEqual } from 'node:crypto';
 import { Public } from '../common/decorators/public.decorator';
 import { AppConfigService } from '../config/app-config.service';
@@ -41,6 +41,15 @@ export class TelegramWebhookController {
     private readonly handler: TelegramUpdateHandlerService,
   ) {}
 
+  @ApiOperation({
+    summary: 'Telegram webhook receiver',
+    description:
+      'Not meant to be called directly — Telegram itself POSTs updates here when ' +
+      'TELEGRAM_MODE=webhook. Verifies X-Telegram-Bot-Api-Secret-Token in constant time and ' +
+      "rejects with 400 if it doesn't match. Always acknowledges with 200 even on internal " +
+      'processing errors, since Telegram retries anything but a 200 — failures are logged ' +
+      'server-side instead of surfaced to the caller.',
+  })
   @Post('webhook')
   @Public()
   @HttpCode(200)

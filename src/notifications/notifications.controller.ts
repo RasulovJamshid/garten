@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { SendNotificationDto } from './dto/send-notification.dto';
@@ -20,6 +20,13 @@ import { AuthenticatedRequest } from '../common/request-context';
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
+  @ApiOperation({
+    summary: 'Send a notification',
+    description:
+      'Rate-limited to 20/min/tenant (not per-user, unlike most other endpoints). Requires an ' +
+      'Idempotency-Key header for contract consistency with the other mutating endpoints — the ' +
+      "real dedup guarantee comes from NotificationsService's own dedup_key, not this header.",
+  })
   @Post('send')
   @RequirePermissions('notification:send')
   // api-spec §2: "Notification sends — 20/min/tenant" — a per-route
@@ -47,6 +54,10 @@ export class NotificationsController {
     return this.notifications.send(dto);
   }
 
+  @ApiOperation({
+    summary: 'List notifications',
+    description: 'Filterable by recipient, channel, status, and date range.',
+  })
   @Get()
   @RequirePermissions('notification:read')
   list(
@@ -59,12 +70,18 @@ export class NotificationsController {
     return this.notifications.list({ recipientId, channel, status, from, to });
   }
 
+  @ApiOperation({
+    summary: 'Get a notification by ID',
+  })
   @Get(':id')
   @RequirePermissions('notification:read')
   get(@Param('id') id: string) {
     return this.notifications.get(id);
   }
 
+  @ApiOperation({
+    summary: 'Retry a failed notification',
+  })
   @Post(':id/retry')
   @RequirePermissions('notification:send')
   retry(@Param('id') id: string) {

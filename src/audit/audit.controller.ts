@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { AppErrors } from '../common/exceptions/app.exception';
@@ -13,6 +13,13 @@ import { AppErrors } from '../common/exceptions/app.exception';
 export class AuditController {
   constructor(private readonly tenantPrisma: TenantPrisma) {}
 
+  @ApiOperation({
+    summary: 'List audit log entries',
+    description:
+      'Filterable by entity type/ID, user, action, and date range. Paginated (limit capped at ' +
+      '200). Read-only and append-only — there are no write endpoints for the audit log. ' +
+      'Requires audit:read.',
+  })
   @Get()
   @RequirePermissions('audit:read')
   async list(
@@ -57,6 +64,9 @@ export class AuditController {
     };
   }
 
+  @ApiOperation({
+    summary: 'Get an audit log entry by ID',
+  })
   @Get(':id')
   @RequirePermissions('audit:read')
   async get(@Param('id') id: string) {

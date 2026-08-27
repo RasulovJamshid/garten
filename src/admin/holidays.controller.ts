@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -17,6 +17,10 @@ export class HolidaysController {
     private readonly audit: AuditService,
   ) {}
 
+  @ApiOperation({
+    summary: 'List holidays',
+    description: 'Filterable by year and branch. Used to exclude non-working days from billing.',
+  })
   @Get()
   list(@Query('year') year?: string, @Query('branchId') branchId?: string) {
     const where: Record<string, unknown> = {};
@@ -30,6 +34,11 @@ export class HolidaysController {
     return this.tenantPrisma.db.holiday.findMany({ where, orderBy: { holidayDate: 'asc' } });
   }
 
+  @ApiOperation({
+    summary: 'Create a holiday',
+    description:
+      'dto.isWorking marks an exception day that IS a working day despite the calendar (e.g. a makeup day).',
+  })
   @Post()
   async create(@Auth() ctx: AuthContext, @Body() dto: CreateHolidayDto) {
     const holiday = await this.tenantPrisma.db.holiday.create({
@@ -51,6 +60,9 @@ export class HolidaysController {
     return holiday;
   }
 
+  @ApiOperation({
+    summary: 'Delete a holiday',
+  })
   @Delete(':id')
   async remove(@Auth() ctx: AuthContext, @Param('id') id: string) {
     const holiday = await this.tenantPrisma.db.holiday.findUnique({ where: { id } });

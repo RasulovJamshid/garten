@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -25,6 +25,12 @@ export class AuthController {
     private readonly tenantPrisma: TenantPrisma,
   ) {}
 
+  @ApiOperation({
+    summary: 'Log in',
+    description:
+      'Authenticates with login (phone, email, or username) + password. Returns an access ' +
+      'token in the body and sets an httpOnly refresh cookie. Rate-limited to 5/min/IP.',
+  })
   @Public()
   @Post('login')
   @HttpCode(200)
@@ -45,6 +51,13 @@ export class AuthController {
     return { accessToken: result.accessToken, user: result.user };
   }
 
+  @ApiOperation({
+    summary: 'Refresh the access token',
+    description:
+      'Exchanges the httpOnly refresh cookie for a new access token and rotates the cookie. ' +
+      "The browser client must call this with credentials: 'include' — a cross-origin request " +
+      'that drops the cookie is the usual cause of an unexplained 401 here.',
+  })
   @Public()
   @Post('refresh')
   @HttpCode(200)
@@ -57,6 +70,10 @@ export class AuthController {
     return { accessToken: result.accessToken };
   }
 
+  @ApiOperation({
+    summary: 'Log out',
+    description: 'Invalidates the refresh session server-side and clears the refresh cookie.',
+  })
   @Public()
   @Post('logout')
   @HttpCode(200)
@@ -66,6 +83,10 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiOperation({
+    summary: 'Change your own password',
+    description: 'Requires the current password. No special permission beyond being logged in.',
+  })
   @Post('change-password')
   @HttpCode(200)
   async changePassword(@Auth() ctx: AuthContext, @Body() dto: ChangePasswordDto) {
@@ -73,6 +94,13 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiOperation({
+    summary: 'Request a password reset',
+    description:
+      'Always returns success regardless of whether the login exists, to avoid leaking which ' +
+      'accounts are real. If it exists and has an active Telegram binding, a 1-hour reset token ' +
+      'is sent there; otherwise nothing is delivered and the request is a silent no-op.',
+  })
   @Public()
   @Post('forgot-password')
   @HttpCode(200)
@@ -85,6 +113,10 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiOperation({
+    summary: 'Reset a password with a token',
+    description: 'Completes the flow started by /forgot-password using the token it delivered.',
+  })
   @Public()
   @Post('reset-password')
   @HttpCode(200)
@@ -94,6 +126,12 @@ export class AuthController {
     return { success: true };
   }
 
+  @ApiOperation({
+    summary: 'Get the current user',
+    description:
+      "Returns the logged-in user's profile, roles, branch scope, effective permissions, and " +
+      "the tenant's permissionsVersion (bump this to force clients to refetch after an RBAC change).",
+  })
   @Get('me')
   async me(@Auth() ctx: AuthContext) {
     const [user, userRoles, tenant] = await Promise.all([

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { FilesService } from './files.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -24,6 +24,20 @@ import { AuthContext } from '../common/auth-context';
 export class FilesController {
   constructor(private readonly files: FilesService) {}
 
+  @ApiOperation({
+    summary: 'Upload a file',
+    description:
+      'Multipart upload, field name "file". Optionally tagged to an entity via entityType/' +
+      'entityId query params. Stored via the local or S3/MinIO driver depending on ' +
+      'STORAGE_DRIVER — callers never see which. Requires file:manage.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
   @Post()
   @RequirePermissions('file:manage')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
@@ -41,6 +55,12 @@ export class FilesController {
     return this.files.upload(ctx, file, entityType, entityId);
   }
 
+  @ApiOperation({
+    summary: 'Download a file',
+    description:
+      "Streams the file's bytes directly — files are never exposed via a presigned URL, so " +
+      'access control is enforced on every download, not just at upload time. Requires file:read.',
+  })
   @Get(':id')
   @RequirePermissions('file:read')
   async download(@Auth() ctx: AuthContext, @Param('id') id: string, @Res() res: Response) {
@@ -54,6 +74,9 @@ export class FilesController {
     stream.pipe(res);
   }
 
+  @ApiOperation({
+    summary: 'Delete a file',
+  })
   @Delete(':id')
   @RequirePermissions('file:manage')
   remove(@Auth() ctx: AuthContext, @Param('id') id: string) {

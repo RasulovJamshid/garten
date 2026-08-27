@@ -9,7 +9,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { PaymentsService } from './payments.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -22,6 +22,10 @@ import { CreatePaymentDto, CancelPaymentDto } from './dto/create-payment.dto';
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
+  @ApiOperation({
+    summary: 'List payments',
+    description: 'Filterable by child, date range, payment method, and who recorded it.',
+  })
   @Get()
   @RequirePermissions('payment:read')
   list(
@@ -34,6 +38,13 @@ export class PaymentsController {
     return this.payments.list({ childId, from, to, method, recordedBy });
   }
 
+  @ApiOperation({
+    summary: 'Record a payment',
+    description:
+      'Records a payment and allocates it against outstanding charges. Requires an ' +
+      'Idempotency-Key header — retrying the same key returns the original result instead of ' +
+      'double-recording the payment.',
+  })
   @Post()
   @RequirePermissions('payment:create')
   create(
@@ -50,18 +61,32 @@ export class PaymentsController {
     return this.payments.create(ctx, dto, idempotencyKey);
   }
 
+  @ApiOperation({
+    summary: 'Get a payment by ID',
+  })
   @Get(':id')
   @RequirePermissions('payment:read')
   get(@Param('id') id: string) {
     return this.payments.get(id);
   }
 
+  @ApiOperation({
+    summary: 'Cancel a payment',
+    description:
+      'Cancels a recorded payment and reverses its allocations, rather than deleting it — ' +
+      'preserves the append-only ledger. Requires dto.reason and the separate payment:cancel ' +
+      'permission.',
+  })
   @Post(':id/cancel')
   @RequirePermissions('payment:cancel')
   cancel(@Auth() ctx: AuthContext, @Param('id') id: string, @Body() dto: CancelPaymentDto) {
     return this.payments.cancel(ctx, id, dto.reason);
   }
 
+  @ApiOperation({
+    summary: 'Get a payment receipt',
+    description: 'Returns an HTML receipt by default; pass ?format=pdf for a downloadable PDF.',
+  })
   @Get(':id/receipt')
   @RequirePermissions('payment:read')
   async receipt(

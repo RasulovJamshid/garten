@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -15,6 +15,10 @@ export class SettingsController {
     private readonly audit: AuditService,
   ) {}
 
+  @ApiOperation({
+    summary: 'Get tenant settings',
+    description: 'The single settings row for this tenant (timezone, language, currency, etc).',
+  })
   @Get()
   @RequirePermissions('settings:manage')
   async get() {
@@ -23,6 +27,9 @@ export class SettingsController {
     });
   }
 
+  @ApiOperation({
+    summary: 'Update tenant settings',
+  })
   @Put()
   @RequirePermissions('settings:manage')
   async update(@Auth() ctx: AuthContext, @Body() dto: UpdateSettingsDto) {

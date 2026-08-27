@@ -1,5 +1,5 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { ExportsService } from './exports.service';
@@ -18,6 +18,10 @@ const MIME: Record<'xlsx' | 'pdf', string> = {
   pdf: 'application/pdf',
 };
 
+// Every endpoint below shares this contract: ?format=json (default) returns
+// rows inline; xlsx/pdf stream synchronously under
+// REPORT_ASYNC_ROW_THRESHOLD rows (api-spec §11), and above it return 202
+// with an export job instead (fetch via GET /exports/:id once ready).
 @ApiTags('reports')
 @Controller('reports')
 export class ReportsController {
@@ -62,6 +66,11 @@ export class ReportsController {
     res.send(buffer);
   }
 
+  @ApiOperation({
+    summary: 'Daily attendance report',
+    description:
+      'Attendance for a single date, optionally filtered by group. Format: json/xlsx/pdf.',
+  })
   @Get('attendance/daily')
   @RequirePermissions('report:read')
   async attendanceDaily(
@@ -83,6 +92,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Monthly attendance report',
+    description: 'Attendance rolled up for a year/month, optionally filtered by group.',
+  })
   @Get('attendance/monthly')
   @RequirePermissions('report:read')
   async attendanceMonthly(
@@ -105,6 +118,11 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Attendance corrections report',
+    description:
+      'Manual attendance corrections over a date range — the reporting view of GET /attendance/corrections.',
+  })
   @Get('attendance/corrections')
   @RequirePermissions('report:read')
   async attendanceCorrections(
@@ -126,6 +144,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Active children report',
+    description: 'Currently active children, optionally filtered by group.',
+  })
   @Get('children/active')
   @RequirePermissions('report:read')
   async childrenActive(
@@ -146,6 +168,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Enrollments report',
+    description: 'Children enrolled within a date range.',
+  })
   @Get('children/enrollments')
   @RequirePermissions('report:read')
   async childrenEnrollments(
@@ -167,6 +193,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Documents-expiring report',
+    description: 'The reporting view of GET /documents/expiring, exportable as xlsx/pdf.',
+  })
   @Get('children/documents-expiring')
   @RequirePermissions('report:read')
   async childrenDocumentsExpiring(
@@ -186,6 +216,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Medical alerts report',
+    description: 'Every active medical alert across all children, exportable as xlsx/pdf.',
+  })
   @Get('children/medical-alerts')
   @RequirePermissions('report:read')
   async childrenMedicalAlerts(
@@ -197,6 +231,10 @@ export class ReportsController {
     return this.respond(res, ctx, format, 'children/medical-alerts', 'medical-alerts', {}, result);
   }
 
+  @ApiOperation({
+    summary: 'Charges report',
+    description: 'Charges for a billing period.',
+  })
   @Get('finance/charges')
   @RequirePermissions('report:read')
   async financeCharges(
@@ -217,6 +255,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Payments report',
+    description: 'Payments over a date range, optionally filtered by method.',
+  })
   @Get('finance/payments')
   @RequirePermissions('report:read')
   async financePayments(
@@ -239,6 +281,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Debts report',
+    description: 'Outstanding debts; set ageing=true (or "overdue") to restrict to overdue-only.',
+  })
   @Get('finance/debts')
   @RequirePermissions('report:read')
   async financeDebts(
@@ -251,6 +297,10 @@ export class ReportsController {
     return this.respond(res, ctx, format, 'finance/debts', 'finance-debts', { ageing }, result);
   }
 
+  @ApiOperation({
+    summary: 'Discounts report',
+    description: 'Discounts granted over a date range.',
+  })
   @Get('finance/discounts')
   @RequirePermissions('report:read')
   async financeDiscounts(
@@ -272,6 +322,10 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Cancellations report',
+    description: 'Cancelled payments/charges (reversals) over a date range.',
+  })
   @Get('finance/cancellations')
   @RequirePermissions('report:read')
   async financeCancellations(
@@ -293,6 +347,9 @@ export class ReportsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Monthly expenses report',
+  })
   @Get('expenses/monthly')
   @RequirePermissions('report:read')
   async expensesMonthly(

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -17,6 +17,9 @@ export class BranchesController {
     private readonly audit: AuditService,
   ) {}
 
+  @ApiOperation({
+    summary: 'List branches',
+  })
   @Get()
   list() {
     return this.tenantPrisma.db.branch.findMany({
@@ -25,6 +28,10 @@ export class BranchesController {
     });
   }
 
+  @ApiOperation({
+    summary: 'Create a branch',
+    description: 'Stage 1 is single-branch in practice, but the schema supports more than one.',
+  })
   @Post()
   async create(@Auth() ctx: AuthContext, @Body() dto: CreateBranchDto) {
     const branch = await this.tenantPrisma.db.branch.create({
@@ -40,6 +47,9 @@ export class BranchesController {
     return branch;
   }
 
+  @ApiOperation({
+    summary: 'Update a branch',
+  })
   @Patch(':id')
   async update(@Auth() ctx: AuthContext, @Param('id') id: string, @Body() dto: UpdateBranchDto) {
     const before = await this.tenantPrisma.db.branch.findUnique({ where: { id } });
