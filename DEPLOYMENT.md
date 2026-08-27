@@ -126,8 +126,12 @@ Then seed the first tenant + Owner login (one-time; safe to skip on later restar
 idempotent but there's no reason to re-run it):
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production exec api npm run seed
+dcprod exec api npm run seed:prod
 ```
+
+Use `seed:prod` here, not plain `seed` — `seed` runs through `ts-node` (fine locally/in CI) but
+the production image ships a plain-JS compile of the same script instead (`dist-seed/`, built by
+`npm run build:seed` in the Dockerfile) specifically so production never depends on `ts-node`.
 
 The Owner password is whatever `generate-prod-secrets.sh` printed (or what you set by hand in
 `.env.production`'s `SEED_OWNER_PASSWORD`). Log in once, confirm access, and treat that value as

@@ -24,6 +24,21 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
 RUN npm run build
+# Separate from `npm run build`: tsconfig.build.json deliberately excludes
+# prisma/ from the main compile (nest build only emits the app), so
+# prisma/seed.ts has never had a compiled JS counterpart to run in
+# production — only `ts-node prisma/seed.ts` locally/in CI. ts-node itself
+# turned out to be the wrong tool to ship into the runtime image: it's
+# unmaintained against Node's newer module-detection behavior, and broke
+# outright on this base image (its own `-e` eval path emits invalid ESM
+# `export {}` into a non-module vm.Script context — a ts-node/Node bug,
+# nothing to do with this app's code — and running prisma/seed.ts as a
+# file failed silently the same way: exit 0, zero output, nothing
+# written). This compiles prisma/seed.ts and its small, dependency-free
+# src/ closure (src/rbac/permission-catalog.ts, src/common/auth-context.ts
+# — nothing else) to plain JS instead, so production runs it with `node`,
+# same as dist/main below, and never touches ts-node at all.
+RUN npm run build:seed
 
 FROM node:22-slim AS runtime
 WORKDIR /app
@@ -39,19 +54,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 # across Prisma versions. Trading some image size for that reliability.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# One-time bootstrap (tenant + owner login), run manually per
+# DEPLOYMENT.md — `docker compose exec api npm run seed:prod` — never
+# from CMD below. Plain compiled JS; see the build stage's comment for
+# why this isn't `npm run seed` (ts-node) in production.
+COPY --from=build /app/dist-seed ./dist-seed
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
-
-# `npm run seed` runs prisma/seed.ts through ts-node (tsconfig.build.json
-# deliberately excludes `prisma/` from `nest build`, so there is no
-# compiled dist/seed.js to run instead) and seed.ts imports
-# src/rbac/permission-catalog.ts directly — so ts-node needs the real TS
-# source tree at runtime, not just dist/. Omitting this makes `docker
-# compose exec api npm run seed` fail with "Cannot find module
-# '../src/rbac/permission-catalog'" the first time anyone actually runs
-# it against this image. ts-node/typescript themselves are devDependencies,
-# already covered by the full node_modules copy above.
-COPY --from=build /app/src ./src
 
 # Only the local-storage write target needs the app user's ownership —
 # recursively chowning all of node_modules (976 packages) cost 2.5+

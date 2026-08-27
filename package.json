@@ -23,6 +23,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts",
+    "build:seed": "tsc -p tsconfig.seed.json",
+    "seed:prod": "node dist-seed/prisma/seed.js",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh",
     "restore:drill": "bash scripts/restore-drill.sh",
