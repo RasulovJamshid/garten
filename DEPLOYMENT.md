@@ -309,8 +309,14 @@ dcprod exec \
 It prints a loud warning and pauses 5 seconds before doing anything — Ctrl-C if the email printed
 back isn't the demo tenant's owner. Takes a few minutes (several hundred sequential API calls).
 
-**When you're done with it**: the demo tenant's data has no effect on the real one and can simply
-be left alone, or removed by deleting the tenant's row (cascades per the schema's FK setup) —
-`DELETE FROM tenant WHERE code = 'demo-test';` via `psql`, **not** through the API, since there's
-no delete-a-tenant endpoint (deliberately — this is a break-glass operation, not a normal one).
-Confirm the code matches before running it; there's no undo.
+**When you're done with it**: the demo tenant's data has no effect on the real one and the
+simplest option is to just leave it alone — it's fully isolated and inert. If you actually want
+it gone: `DELETE FROM tenant WHERE code = 'demo-test';` does **not** cascade cleanly — 8 core
+tables (`app_user`, `branch`, `charge`, `child`, `child_group`, `guardian`, `payment`,
+`payment_allocation`) deliberately have no cascading FK from `tenant`, precisely so an accidental
+delete can't silently wipe the ledger. It fails loudly with a foreign-key error instead of
+corrupting anything, but that means removing a tenant means deleting from those (and whatever
+they in turn block) in dependency order first — not a one-liner, and not worth improvising under
+time pressure. If you need this often, ask for a proper `scripts/delete-tenant.sql` that does the
+ordering correctly; for a one-off, the least risky path is: pick a fresh `SEED_TENANT_CODE` for
+your next demo tenant rather than trying to reclaim an old one's code.

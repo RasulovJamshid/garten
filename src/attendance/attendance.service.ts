@@ -282,7 +282,14 @@ export class AttendanceService {
   }
 
   async checkOut(ctx: AuthContext, dto: CheckOutDto) {
-    const attendanceDate = dateOnly(todayInTashkent());
+    // Must derive attendanceDate from dto.at, the same way checkIn does —
+    // using today's date unconditionally here means a backdated checkout
+    // (dto.at set to an earlier day, e.g. entering a forgotten checkout
+    // the next morning) can never find the row checkIn created under that
+    // earlier date, and fails with a confusing NOT_CHECKED_IN even though
+    // the child genuinely was checked in.
+    const at = dto.at ? new Date(dto.at) : new Date();
+    const attendanceDate = dateOnly(todayInTashkent(at));
     const row = await this.tenantPrisma.db.attendanceDay.findUnique({
       where: {
         tenantId_childId_attendanceDate: {
@@ -294,8 +301,6 @@ export class AttendanceService {
     });
     if (!row || !row.checkInAt) throw AppErrors.conflict('NOT_CHECKED_IN');
     if (row.checkOutAt) throw AppErrors.conflict('NOT_CHECKED_IN'); // already checked out today
-
-    const at = dto.at ? new Date(dto.at) : new Date();
 
     const updated = await this.tenantPrisma.db.attendanceDay.update({
       where: { id: row.id },
