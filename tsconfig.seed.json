@@ -4,6 +4,6 @@
     "outDir": "./dist-seed",
     "rootDir": "."
   },
-  "include": ["prisma/seed.ts"],
+  "include": ["prisma/seed.ts", "prisma/seed-demo.ts"],
   "exclude": ["node_modules", "dist", "dist-seed", "test", "**/*.spec.ts", "kindergarten-docs"]
 }

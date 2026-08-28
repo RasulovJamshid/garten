@@ -26,6 +26,7 @@
     "seed:demo": "ts-node prisma/seed-demo.ts",
     "build:seed": "tsc -p tsconfig.seed.json",
     "seed:prod": "node dist-seed/prisma/seed.js",
+    "seed:demo:prod": "node dist-seed/prisma/seed-demo.js",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh",
     "restore:drill": "bash scripts/restore-drill.sh",

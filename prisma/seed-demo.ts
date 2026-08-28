@@ -15,26 +15,47 @@
  * it creates and logs in as the Owner it creates), and the API server is
  * running and reachable at APP_URL.
  *
- * NEVER run this against production — it creates fake children and
- * guardians, which must never land in a real tenant's database. Refuses
- * to run at all when NODE_ENV=production, as a backstop against exactly
- * that mistake.
+ * NEVER run this against a tenant real users depend on — it creates fake
+ * children and guardians. Refuses to run when NODE_ENV=production unless
+ * ALLOW_DEMO_SEED_IN_PRODUCTION=true is ALSO set — a deliberate two-step
+ * opt-in, not a single flag flip, so this can't land in the wrong tenant
+ * by accident. The intended production use is a separate, isolated demo
+ * tenant on the same server (different SEED_TENANT_CODE / SEED_OWNER_EMAIL
+ * from the real one — see DEPLOYMENT.md) — never the real tenant itself.
  */
 import { randomUUID } from 'node:crypto';
 
-if (process.env.NODE_ENV === 'production') {
+const inProduction = process.env.NODE_ENV === 'production';
+const prodOverride = process.env.ALLOW_DEMO_SEED_IN_PRODUCTION === 'true';
+
+if (inProduction && !prodOverride) {
   console.error(
     'seed-demo will not run with NODE_ENV=production — this creates fake ' +
       'children and guardians, which must never touch a real tenant. Point ' +
-      'it at a local/dev/staging database (and API_PREFIX/APP_URL) instead.',
+      'it at a local/dev/staging database, or set ' +
+      'ALLOW_DEMO_SEED_IN_PRODUCTION=true against an isolated demo tenant ' +
+      '(see DEPLOYMENT.md) if you specifically mean to run this in production.',
   );
   process.exit(1);
+}
+
+const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@demo.local';
+
+if (inProduction && prodOverride) {
+  console.warn(
+    `ALLOW_DEMO_SEED_IN_PRODUCTION=true — running against a PRODUCTION server, ` +
+      `logging in as "${OWNER_EMAIL}". This MUST be an isolated demo tenant's ` +
+      `owner, never the real one. Ctrl-C now if that's not true. Continuing in 5s...`,
+  );
+}
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3010';
 const API_PREFIX = process.env.API_PREFIX ?? '/api/v1';
 const BASE = `${APP_URL}${API_PREFIX}`;
-const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'owner@demo.local';
 const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD ?? 'ChangeMe12345!';
 
 let token = '';
@@ -120,6 +141,8 @@ function nextGuardianPhone(): string {
 }
 
 async function main() {
+  if (inProduction && prodOverride) await delay(5000);
+
   console.log(`Target API: ${BASE}`);
 
   const login = await api<{ accessToken: string }>('POST', '/auth/login', {

@@ -262,3 +262,55 @@ two deploy on different cadences, and coupling them means a frontend typo blocks
 | 401 from `POST /auth/refresh`, login "forgets" | the client isn't sending `credentials: 'include'` |
 | Telegram webhook never fires | `APP_URL` points at the UI host instead of `api.alishaxkids.uz` |
 | `alishaxkids.uz` returns 502 | `web` isn't running — missing `--profile web` or `WEB_IMAGE` unset |
+
+## 9. Realistic demo data on production, without touching the real tenant
+
+`npm run seed:demo:prod` populates groups, staff, ~15 children with guardians, tariffs, a month
+of attendance, a committed billing run, and payments (see `prisma/seed-demo.ts`). It refuses to
+run against `NODE_ENV=production` by default — this section is for the one legitimate exception:
+testing over the real domain without any risk to real data, by seeding an **isolated second
+tenant** on the same server rather than the tenant your real kindergarten uses.
+
+This works because every table in this schema is scoped by `tenant_id` — a second tenant's
+children, billing periods, and ledger rows never intersect with the first tenant's, no matter
+what happens to either one.
+
+**Step 1 — create the isolated demo tenant + its own Owner login.** Reuses the base seed
+(`seed:prod`) with different `SEED_*` values passed only to this one command — `.env.production`
+itself is untouched, so the real tenant's seed config isn't affected:
+
+```bash
+dcprod exec \
+  -e SEED_TENANT_CODE=demo-test \
+  -e SEED_TENANT_NAME="Demo Test Kindergarten" \
+  -e SEED_OWNER_EMAIL=demo-owner@alishaxkids.uz \
+  -e SEED_OWNER_PASSWORD="<generate a real one, don't reuse the real Owner's>" \
+  api npm run seed:prod
+```
+
+Confirm it printed a **different** tenant id than your real one before continuing.
+
+**Step 2 — populate that tenant with demo data.** `ALLOW_DEMO_SEED_IN_PRODUCTION=true` is a
+deliberate second flag — `NODE_ENV=production` alone still refuses to run — so this can't fire
+against the wrong tenant from a copy-pasted command missing one line. `APP_URL` is overridden to
+the container-internal address (`http://api:3000`) for just this command, avoiding a same-host
+network hairpin some Docker setups have going out through the public domain and back in:
+
+```bash
+dcprod exec \
+  -e NODE_ENV=production \
+  -e ALLOW_DEMO_SEED_IN_PRODUCTION=true \
+  -e APP_URL=http://api:3000 \
+  -e SEED_OWNER_EMAIL=demo-owner@alishaxkids.uz \
+  -e SEED_OWNER_PASSWORD="<same password from step 1>" \
+  api npm run seed:demo:prod
+```
+
+It prints a loud warning and pauses 5 seconds before doing anything — Ctrl-C if the email printed
+back isn't the demo tenant's owner. Takes a few minutes (several hundred sequential API calls).
+
+**When you're done with it**: the demo tenant's data has no effect on the real one and can simply
+be left alone, or removed by deleting the tenant's row (cascades per the schema's FK setup) —
+`DELETE FROM tenant WHERE code = 'demo-test';` via `psql`, **not** through the API, since there's
+no delete-a-tenant endpoint (deliberately — this is a break-glass operation, not a normal one).
+Confirm the code matches before running it; there's no undo.
