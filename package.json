@@ -23,6 +23,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts",
+    "seed:demo": "ts-node prisma/seed-demo.ts",
     "build:seed": "tsc -p tsconfig.seed.json",
     "seed:prod": "node dist-seed/prisma/seed.js",
     "backup": "bash scripts/backup.sh",

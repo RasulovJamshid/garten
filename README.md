@@ -63,10 +63,18 @@ npm install
 npx prisma generate
 npm run seed                              # creates the demo tenant + owner login
 npm run start:dev
+npm run seed:demo                         # optional — realistic fake data, see below
 ```
 
 API listens on `http://localhost:3010/api/v1` (port/prefix from `.env`). Swagger UI at
 `http://localhost:3010/docs`.
+
+`npm run seed:demo` (run after `start:dev` — it drives the real HTTP API, so the server must
+already be up) fills in groups, staff, ~15 children with guardians, tariffs, a month of
+attendance history, a committed billing run, and payments (a few deliberately partial or missing,
+to produce real debts) — useful for demoing the system or developing the frontend against
+realistic data. It refuses to run with `NODE_ENV=production`, since it creates fake children and
+guardians that must never land in a real tenant.
 
 Seed prints the owner login — default `owner@demo.local` / `ChangeMe12345!` (override via
 `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` in `.env` before seeding).
