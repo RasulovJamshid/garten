@@ -85,6 +85,10 @@ Then hand-edit `.env.production` for what the generator deliberately leaves alon
   origin (`https://alishaxkids.uz`). These are no longer the same value: swapping them breaks the
   Telegram webhook in one direction and every browser call in the other.
 - `SEED_TENANT_CODE`, `SEED_TENANT_NAME`, `SEED_OWNER_EMAIL` — the real first tenant.
+- `LANDING_DEFAULT_TENANT_CODE`, if the public marketing site is served here: set it to the tenant
+  whose landing page lives at the apex domain, so the site can call `GET /public/landing` without a
+  tenant code in the URL. The marketing site's origin also has to be in `CORS_ORIGINS` — it is a
+  browser origin like any other, and the landing endpoints are not exempt from the allow-list.
 - `--- telegram` block, if you're turning the bot on now rather than later.
 - `SENTRY_DSN`, if you want error aggregation from day one (recommended).
 

@@ -417,6 +417,24 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   },
   {
     group: 'admin',
+    key: 'landing:manage',
+    scopes: ['all'],
+    descriptionUz: 'Saytning bosh sahifasi kontentini tahrirlash',
+    descriptionRu: 'Редактирование контента главной страницы сайта',
+  },
+  {
+    // Separate from landing:manage on purpose: drafting is editorial work,
+    // pushing it to the public internet is not. A content editor gets the
+    // first without the second (01-stage1-plan.md §5.6 role templates).
+    group: 'admin',
+    key: 'landing:publish',
+    scopes: ['all'],
+    descriptionUz: 'Bosh sahifa o‘zgarishlarini nashr qilish',
+    descriptionRu: 'Публикация изменений главной страницы',
+    sensitive: true,
+  },
+  {
+    group: 'admin',
     key: 'holiday:manage',
     scopes: ['all', 'branch'],
     descriptionUz: 'Dam olish kunlarini boshqarish',

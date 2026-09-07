@@ -31,6 +31,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ImportsModule } from './imports/imports.module';
+import { LandingModule } from './landing/landing.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TraceIdMiddleware } from './common/middleware/trace-id.middleware';
 
@@ -71,6 +72,7 @@ import { TraceIdMiddleware } from './common/middleware/trace-id.middleware';
     ReportsModule,
     DashboardModule,
     ImportsModule,
+    LandingModule,
   ],
   providers: [
     // Order is the contract: JwtAuthGuard sets req.user, AppThrottlerGuard
