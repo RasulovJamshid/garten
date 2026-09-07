@@ -694,6 +694,72 @@ model ImportJob {
   @@map("import_job")
 }
 
+/// The public marketing site's content, one row per page (slug "home" is
+/// the landing page itself). `draft` state lives in landing_block; this row
+/// carries only what visitors see — published_snapshot is the frozen copy the
+/// anonymous endpoint reads, so an unfinished edit can never leak and the
+/// public read is a single row with no joins.
+model LandingPage {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String               @map("tenant_id") @db.Uuid
+  slug              String               @default("home")
+  seo               Json?
+  publishedSnapshot Json?                @map("published_snapshot")
+  publishedAt       DateTime?            @map("published_at") @db.Timestamptz(6)
+  publishedBy       String?              @map("published_by") @db.Uuid
+  version           Int                  @default(0)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy         String?              @map("updated_by") @db.Uuid
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  block             LandingBlock[]
+  landingVersion    LandingPageVersion[]
+
+  @@unique([tenantId, slug])
+  @@map("landing_page")
+}
+
+/// One editable section of a landing page. `type` picks which shape `content`
+/// must have — validated in code (src/landing/block-content.ts), not by the
+/// column, so adding a section type never needs a migration. Text inside
+/// `content` is locale-keyed ({ uz, ru, en }).
+model LandingBlock {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  pageId    String      @map("page_id") @db.Uuid
+  type      String
+  position  Int
+  isVisible Boolean     @default(true) @map("is_visible")
+  content   Json
+  fileIds   String[]    @default([]) @map("file_ids") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy String?     @map("updated_by") @db.Uuid
+  page      LandingPage @relation(fields: [pageId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([pageId, position])
+  @@map("landing_block")
+}
+
+/// Every publish, frozen. Restoring one replays its snapshot back into the
+/// draft blocks — so a bad publish is undone without retyping content.
+model LandingPageVersion {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String      @map("tenant_id") @db.Uuid
+  pageId      String      @map("page_id") @db.Uuid
+  version     Int
+  snapshot    Json
+  note        String?
+  publishedAt DateTime    @default(now()) @map("published_at") @db.Timestamptz(6)
+  publishedBy String?     @map("published_by") @db.Uuid
+  page        LandingPage @relation(fields: [pageId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([pageId, version])
+  @@map("landing_page_version")
+}
+
 model LoginAttempt {
   id          BigInt   @id @default(autoincrement())
   tenantId    String?  @map("tenant_id") @db.Uuid
@@ -798,21 +864,21 @@ model Notification {
 }
 
 model NotificationTemplate {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  templateKey String   @map("template_key")
-  bodyUz      String   @map("body_uz")
-  bodyRu      String   @map("body_ru")
-  variables   String[]
-  enabled     Boolean  @default(true)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  templateKey    String   @map("template_key")
+  bodyUz         String   @map("body_uz")
+  bodyRu         String   @map("body_ru")
+  variables      String[]
+  enabled        Boolean  @default(true)
   // 05-telegram-spec.md §5 "Privacy defaults" requires this per-template
   // toggle (charge_created/debt_reminder default to showing amounts, but a
   // tenant can turn it off) — the provided 01-schema.sql omitted the
   // column even though its own companion spec depends on it.
-  includeAmounts Boolean @default(true) @map("include_amounts")
-  updatedBy   String?  @map("updated_by") @db.Uuid
-  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  includeAmounts Boolean  @default(true) @map("include_amounts")
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([tenantId, templateKey])
   @@map("notification_template")
@@ -1104,6 +1170,9 @@ model Tenant {
   healthIncident       HealthIncident[]
   holiday              Holiday[]
   importJob            ImportJob[]
+  landingBlock         LandingBlock[]
+  landingPage          LandingPage[]
+  landingPageVersion   LandingPageVersion[]
   lookupValue          LookupValue[]
   medicalRecord        MedicalRecord[]
   medication           Medication[]
@@ -1163,15 +1232,15 @@ model UserPermissionOverride {
 /// since Prisma can't express partial-unique constraints declaratively —
 /// same limitation as notification.dedup_key and consent's uq_consent).
 model UserRole {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  roleId    String    @map("role_id") @db.Uuid
-  branchId  String?   @map("branch_id") @db.Uuid
-  grantedBy String?   @map("granted_by") @db.Uuid
-  grantedAt DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
-  branch    Branch?   @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  role      Role      @relation(fields: [roleId], references: [id], onUpdate: NoAction)
-  appUser   AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  branchId  String?  @map("branch_id") @db.Uuid
+  grantedBy String?  @map("granted_by") @db.Uuid
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+  branch    Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role      Role     @relation(fields: [roleId], references: [id], onUpdate: NoAction)
+  appUser   AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([userId, roleId, branchId], map: "uq_user_role_branch")
   @@map("user_role")

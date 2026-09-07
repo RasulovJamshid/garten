@@ -37,6 +37,12 @@ const ROLE_GRANTS: Record<string, Grant[]> = {
     { key: 'user:manage', scope: 'all' },
     { key: 'role:manage', scope: 'all' },
     { key: 'settings:manage', scope: 'all' },
+    // Both halves: an administrator already pushes announcements to every
+    // parent, so publishing the website is not a step up in blast radius.
+    // The manage/publish split earns its keep for a tenant-defined
+    // "content editor" role that should draft but not go live.
+    { key: 'landing:manage', scope: 'all' },
+    { key: 'landing:publish', scope: 'all' },
     { key: 'branch:manage', scope: 'all' },
     { key: 'holiday:manage', scope: 'all' },
     { key: 'announcement:manage', scope: 'all' },

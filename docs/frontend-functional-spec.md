@@ -11,7 +11,7 @@ idempotency, RBAC mechanics).
 > exact request/response shapes. Where a shape is spelled out below it comes from the backend API
 > spec, but if it ever disagrees with `openapi.json`, the schema wins.
 
-The API is **fully implemented** — 185 operations across 22 modules. All paths below are relative
+The API is **fully implemented** — 199 operations across 23 modules. All paths below are relative
 to the base prefix `http://localhost:3010/api/v1`.
 
 ---
@@ -546,6 +546,48 @@ GET /audit ?entity=&entityId=&userId=&action=&from=&to=   GET /audit/:id (before
 
 ---
 
+### B23. Landing page (public website content)
+
+> Full contracts, block schemas, examples and an editor checklist: **`frontend-landing-page.md`**.
+
+**Endpoints**
+```
+GET  /landing (draft, all locales, + hasUnpublishedChanges)   GET /landing/block-types (section catalog)
+POST /landing/blocks   PUT /landing/blocks/reorder   PUT /landing/blocks/:id   DELETE /landing/blocks/:id
+PUT  /landing/seo      POST /landing/publish        GET /landing/versions   GET /landing/versions/:v
+POST /landing/versions/:v/restore
+public, no auth: GET /public/landing/:tenantCode ?lang=uz|ru|en   GET /public/landing/:tenantCode/media/:fileId
+```
+**Key data:** a page is an **ordered list of typed blocks** — `hero · about · features · gallery ·
+teachers · pricing · testimonials · faq · contacts · cta · stats`. Every text field is
+locale-keyed `{uz, ru, en}`; images are `fileId`s uploaded through B20.
+
+**Functional requirements**
+- **Editor screen**: block list in display order with drag-to-reorder, show/hide per block, add a
+  block from the type catalog, and a per-block form. **Build the forms from
+  `GET /landing/block-types`, not from a hardcoded field list** — a section type added server-side
+  should appear in the editor without a frontend release.
+- **Locale tabs (uz/ru/en) per text field.** Locales are individually optional: the public endpoint
+  falls back (requested → ru → uz → en) rather than rendering an empty section, so a half-translated
+  page is a valid state, not an error to block on.
+- **Draft vs live.** Everything under `/landing` is the draft; visitors see nothing until
+  **Publish**. Use `hasUnpublishedChanges` to enable the Publish button and warn on navigate-away.
+  `GET /landing` is also the preview source — it is exactly what publishing would make live.
+- **Version history** with restore. Restoring republishes as a *new* version, so it is itself
+  undoable — present it as "restore", never as "roll back and lose what is live".
+- **Images**: upload via `POST /files`, put the returned `fileId` in the block, publish. The public
+  site loads it from `mediaBaseUrl` in the public payload — **never** from `/files/:id`, which
+  requires a token. A file becomes publicly readable only while a *published* block references it.
+- **Validation**: block content is checked against its type's schema server-side — expect `422
+  VALIDATION_FAILED` with a `details` array of `{path, message}`, and map each entry back onto the
+  offending field in the form.
+- **The public endpoint is for the marketing site, not the admin app.** It is anonymous, cached
+  (ETag + `Cache-Control`), rate-limited to 60/min/IP, and returns one language flattened. The
+  marketing site's origin must be in `CORS_ORIGINS`.
+
+**Permissions:** `landing:manage` to edit, `landing:publish` to make it live. Hide the Publish and
+Restore actions for an editor who holds only the first.
+
 ## Part C — Suggested build order
 
 Ship in slices that give a usable app early; each depends roughly on the ones above it.
@@ -557,6 +599,7 @@ Ship in slices that give a usable app early; each depends roughly on the ones ab
 5. **Notifications + Announcements**, then **Reports + Dashboards**.
 6. **Admin** — Users, Roles/permissions matrix, Settings/branches/holidays, Audit.
 7. **Expenses, Files polish, Imports** — supporting flows.
+8. **Landing page editor** — independent of everything above; slot it in whenever the public site needs to go live.
 
 For anything not fully specified here, the endpoint's exact contract is in `openapi.json`; the
 deep business rules are in `kindergarten-docs/docs/` (billing in `03-billing-rules.md`, Telegram in

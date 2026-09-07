@@ -85,6 +85,13 @@ export const envSchema = z.object({
   DEFAULT_LANGUAGE: z.enum(['uz', 'ru']).default('ru'),
   DEFAULT_CURRENCY: z.string().default('UZS'),
 
+  // Lets a single-kindergarten deployment serve GET /public/landing with
+  // no tenant code in the URL (the marketing site shouldn't have to know
+  // one). Unset = the bare route 404s and callers must use
+  // /public/landing/{tenantCode}; it is only ever a lookup key against
+  // `tenant.code`, never a filter value taken on trust.
+  LANDING_DEFAULT_TENANT_CODE: z.string().optional(),
+
   PGBOSS_SCHEMA: z.string().default('jobs'),
   JOB_CONCURRENCY: z.coerce.number().int().positive().default(5),
   // api-spec §11: "Under ~5,000 rows, generate synchronously and stream
