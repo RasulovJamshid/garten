@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
+import { TenantScopedClient } from '../prisma/tenant-extension';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
@@ -31,6 +32,38 @@ export interface LandingSnapshot {
    *  media route serves from, so it never has to walk the blocks itself. */
   fileIds: string[];
   publishedAt: string;
+}
+
+/**
+ * The transaction client `tenantPrisma.db.$transaction()` hands its
+ * callback. Derived from the extended client rather than written as
+ * `Prisma.TransactionClient` — the tenant extension changes the type, and
+ * the base one would only typecheck behind a cast.
+ */
+type LandingTx = Parameters<Parameters<TenantScopedClient['$transaction']>[0]>[0];
+
+/**
+ * Whether the draft holds anything the public page has not seen yet —
+ * the editor's Publish button and its navigate-away warning both hang off
+ * this.
+ *
+ * Pure and exported so it can be unit-tested without a database: the
+ * subtle case is a page that has JUST been published, where every
+ * timestamp is within milliseconds of every other one and an off-by-a-tick
+ * comparison leaves the Publish button lit forever. Publish and restore
+ * therefore stamp `updatedAt` with the same instant they write
+ * `publishedAt`, and this compares strictly.
+ */
+export function isDraftDirty(
+  page: { publishedAt: Date | null; updatedAt: Date },
+  blocks: { updatedAt: Date }[],
+): boolean {
+  if (!page.publishedAt) return true;
+  const lastEdit = blocks.reduce(
+    (latest, b) => (b.updatedAt > latest ? b.updatedAt : latest),
+    page.updatedAt,
+  );
+  return lastEdit > page.publishedAt;
 }
 
 @Injectable()
@@ -69,22 +102,9 @@ export class LandingService {
       version: page.version,
       publishedAt: page.publishedAt,
       publishedVersion: published?.version ?? null,
-      /** Cheap "you have unsaved changes" signal for the editor's Publish
-       *  button — a draft edit always bumps updatedAt past publishedAt. */
-      hasUnpublishedChanges: this.isDirty(page, blocks),
+      /** Drives the editor's Publish button and its navigate-away warning. */
+      hasUnpublishedChanges: isDraftDirty(page, blocks),
     };
-  }
-
-  private isDirty(
-    page: { publishedAt: Date | null; updatedAt: Date },
-    blocks: { updatedAt: Date }[],
-  ): boolean {
-    if (!page.publishedAt) return true;
-    const lastEdit = blocks.reduce(
-      (latest, b) => (b.updatedAt > latest ? b.updatedAt : latest),
-      page.updatedAt,
-    );
-    return lastEdit > page.publishedAt;
   }
 
   async createBlock(ctx: AuthContext, dto: CreateBlockDto) {
@@ -261,7 +281,10 @@ export class LandingService {
       publishedAt: publishedAt.toISOString(),
     };
 
-    await this.tenantPrisma.db.$transaction(async (tx) => {
+    // (pageId, version) is unique, so two editors publishing in the same
+    // instant collide there rather than one silently overwriting the
+    // other's version row. Surface that as a 409 the UI can retry.
+    await this.writeVersion(async (tx) => {
       await tx.landingPage.update({
         where: { id: page.id },
         data: {
@@ -269,6 +292,11 @@ export class LandingService {
           publishedAt,
           publishedBy: ctx.userId,
           version,
+          // Explicit, overriding @updatedAt: Prisma would stamp "now",
+          // which is a hair LATER than `publishedAt` computed just above,
+          // and isDraftDirty() would then read the publish itself as an
+          // unpublished edit — leaving the Publish button lit forever.
+          updatedAt: publishedAt,
         },
       });
       await tx.landingPageVersion.create({
@@ -333,7 +361,7 @@ export class LandingService {
       publishedAt: publishedAt.toISOString(),
     };
 
-    await this.tenantPrisma.db.$transaction(async (tx) => {
+    await this.writeVersion(async (tx) => {
       await tx.landingBlock.deleteMany({ where: { pageId: page.id } });
       for (const block of snapshot.blocks) {
         await tx.landingBlock.create({
@@ -346,6 +374,10 @@ export class LandingService {
             content: block.content as Prisma.InputJsonValue,
             fileIds: collectFileIds(block.content),
             updatedBy: ctx.userId,
+            // Same instant as the page's publishedAt below — a restore
+            // publishes what it restores, so the draft is clean the moment
+            // it finishes (see isDraftDirty).
+            updatedAt: publishedAt,
           },
         });
       }
@@ -358,6 +390,7 @@ export class LandingService {
           publishedBy: ctx.userId,
           version: nextVersion,
           updatedBy: ctx.userId,
+          updatedAt: publishedAt,
         },
       });
       await tx.landingPageVersion.create({
@@ -382,6 +415,25 @@ export class LandingService {
     });
 
     return { version: nextVersion, restoredFrom: version, publishedAt };
+  }
+
+  /**
+   * Runs a publish/restore transaction, turning the (pageId, version)
+   * unique violation two simultaneous publishes race into a 409 the editor
+   * can act on, rather than an unhandled Prisma error and a 500.
+   * Mirrors billing-runs.service.ts's concurrent-commit guard.
+   */
+  private async writeVersion(fn: (tx: LandingTx) => Promise<void>): Promise<void> {
+    try {
+      await this.tenantPrisma.db.$transaction(fn);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw AppErrors.conflict(
+          'CONCURRENT_PUBLISH: someone else published while you were publishing; reload and retry',
+        );
+      }
+      throw e;
+    }
   }
 
   private async findBlockOrThrow(id: string) {
