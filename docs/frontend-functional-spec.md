@@ -4,7 +4,9 @@ The module-by-module reference for building the UI: **what each screen does, whi
 back it, what the responses look like, the business rules the UI must honor, and who is allowed
 to see it.** Read this together with the [Integration Guide](frontend-integration-guide.md),
 which owns the cross-cutting contract (auth, error envelope, money-as-tiyin, dates, pagination,
-idempotency, RBAC mechanics).
+idempotency, RBAC mechanics), and the [Design Guide](frontend-design-guide.md), which owns how the
+screens look and flow (personas, design foundations, navigation, cross-cutting patterns,
+screen-by-screen design).
 
 > **Field names are authoritative in `openapi.json`, not here.** This doc gives you the *structure,
 > behavior, and requirements*; generate types from `openapi.json` (Integration Guide §3) for the
@@ -56,7 +58,7 @@ are for display only.
 - **Every money value** = integer-tiyin string. Use the shared `formatMoney`/`toTiyin` helpers. Never a float.
 - **Every mutation** should surface the error `code` mapped to a localized message; validation errors (`422`) map `details` to field errors.
 - **Financial writes** (`POST /payments`, `/billing-runs/:id/commit`, `/notifications/send`) require an `Idempotency-Key`.
-- **Files** are referenced by `fileId`; upload via `POST /files` first, then attach the id. Downloads are short-lived signed URLs (§S4).
+- **Files** are referenced by `fileId`; upload via `POST /files` first, then attach the id. `GET /files/:id` **streams bytes and requires the Bearer token** — it is not a signed URL, so it cannot go in an `<img src>` or a plain link (§B20).
 - **Localization**: `ru` default + `uz`. Server renders notification text and PDF receipts; everything else the client localizes from codes/keys.
 
 ---
@@ -278,7 +280,8 @@ POST /attendance/:id/correct {field,newValue,reason(min 10 chars)}   GET /attend
 - Corrections require a `reason` (min 10 chars) and are audited; provide a corrections log view.
 - Calendar (per child, per month) and summary (present/absent counts) views.
 - Check-out fires a parent notification asynchronously — don't block the UI on it.
-- An SSE feed `GET /attendance/stream` may exist for live reception updates (optional enhancement).
+- **There is no SSE/websocket feed.** `GET /attendance/stream` does not exist. For a live reception
+  board, poll `/attendance/today` on an interval (~20–30 s) and on window focus.
 
 **Permissions:** `attendance:*` (reception = `today` scope; teacher = `own_group`).
 
@@ -458,7 +461,9 @@ GET /exports/:id -> {status, downloadUrl, expiresAt}
 **Functional requirements**
 - Report screens with filters; `format=json` renders inline tables. `xlsx`/`pdf` **may return
   `202 {jobId,status:'processing'}`** for large result sets (~>5,000 rows) — poll `GET /exports/:id`
-  until `downloadUrl` is ready, then download. Build one reusable "async export" handler.
+  until `downloadUrl` is non-null. That `downloadUrl` is `/files/{id}`, an authenticated API path,
+  **not** a link the browser can follow on its own — download it the same way as any other file
+  (§B20). Build one reusable "async export" handler.
 - Finance reports are permission-gated (finance); attendance/children reports per their scopes.
 
 **Permissions:** `report:read` (per-report scoping; finance reports under finance).
@@ -501,15 +506,19 @@ PATCH /expenses/:id   POST /expenses/:id/pay {paidAt,amountTiyin,attachmentFileI
 
 **Endpoints**
 ```
-POST /files (multipart) -> {fileId,url,size,mime}   GET /files/:id (signed URL, 15-min expiry, permission-checked)   DELETE /files/:id
+POST /files (multipart) -> {fileId,url,size,mime}   GET /files/:id (streams the bytes, Bearer-authenticated)   DELETE /files/:id
 ```
 **Functional requirements**
 - Generic upload used by children documents, pickup photos, payment/expense attachments, settings
   logo, announcements. **Flow: upload → get `fileId` → attach the id to the parent record.**
 - Enforce client-side limits matching the server: max size `MAX_UPLOAD_MB` (default 20) and MIME
   allow-list (jpeg/png/webp/pdf) — expect `413 FILE_TOO_LARGE` / `415 UNSUPPORTED_MEDIA_TYPE`.
-- Download URLs are **signed and expire in 15 min** — fetch a fresh URL at click time; never cache
-  or hard-link them.
+- **There are no signed/presigned URLs.** `GET /files/:id` streams the bytes with
+  `Content-Disposition: attachment`, and permission is checked on every request. Consequences:
+  `<img src="/files/:id">` and `<a href="/files/:id">` both fail with 401, because the browser sends
+  no Authorization header. Fetch with the auth header and use an object URL instead — see the
+  file-access pattern in `frontend-design-guide.md` §4.4.
+- `url` in the upload response is the path `/files/{id}`, not a ready-to-use link.
 
 **Permissions:** checked per owning resource.
 

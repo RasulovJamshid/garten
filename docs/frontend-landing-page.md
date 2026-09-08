@@ -538,8 +538,12 @@ pick image → POST /files (multipart, field "file")
            → …later… Publish → now fetchable at mediaBaseUrl/{fileId}
 ```
 
-- In the **editor**, preview with the authenticated `GET /files/:id`, exactly as elsewhere in the app.
+- In the **editor**, preview with `GET /files/:id` — which streams bytes behind the Bearer token,
+  so it needs the authenticated-fetch → object-URL helper, not an `<img src>`. See
+  `frontend-design-guide.md` §4.4; use the same `<AuthImage>` component as the rest of the app.
 - On the **public site**, always `${mediaBaseUrl}/${fileId}`. Never `/files/:id` — it needs a token.
+  The public media route is the one place in the product that serves a file anonymously, so it is
+  the only one usable directly as an `<img src>`.
 - A file is publicly readable **only while a published block references it**. A just-uploaded image
   is not public until the next publish. That is intended, not a bug.
 - The server rejects a non-image at edit time with a 422 — surface it on the field, don't swallow it.

@@ -7,6 +7,8 @@ summarizes the parts of it that the client must honor exactly.
 > **This guide covers the cross-cutting contract** (auth, errors, money, dates, pagination,
 > idempotency, RBAC mechanics). For **per-module endpoints, response structures, business rules,
 > and screen requirements**, see the companion [Functional & API Spec](frontend-functional-spec.md).
+> For **how the screens should look and flow** — personas, design foundations, navigation,
+> cross-cutting UI patterns — see the [Design Guide](frontend-design-guide.md).
 
 > **This guide is self-contained.** You do not need access to the backend source (`src/`,
 > `prisma/`) — everything the client must honor is written out here. Your only external input is
