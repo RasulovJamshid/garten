@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
 import { todayInTashkent } from '../common/tashkent-date';
+import { andWhere } from '../common/prisma-where';
 
 export interface ScopeFields {
   /** Column that carries the branch id on the target table. Default 'branchId'. */
@@ -17,6 +18,10 @@ export interface ScopeFields {
  * (01-stage1-plan.md §5.3). Every list/read endpoint should run its Prisma
  * `where` through this before querying — a teacher guessing a child's UUID
  * outside their own_group gets 404, not the record.
+ *
+ * Scope clauses are ANDed in, never assigned onto `where` — a caller
+ * filter and the scope it must obey routinely want the same Prisma key
+ * (prisma-where.ts).
  *
  * Usage:
  *   const where = this.scope.apply(ctx, 'child:read', {}, { ownGroupField: 'groupId' });
@@ -41,12 +46,12 @@ export class ScopeService {
 
       case 'branch': {
         const field = fields.branchField ?? 'branchId';
-        return { ...where, [field]: { in: ctx.branchIds } };
+        return andWhere(where, { [field]: { in: ctx.requireBranchIds() } }) as W;
       }
 
       case 'own_group': {
         const field = fields.ownGroupField ?? 'groupId';
-        return { ...where, [field]: { in: ctx.ownGroupIds } };
+        return andWhere(where, { [field]: { in: ctx.requireOwnGroupIds() } }) as W;
       }
 
       case 'today': {
@@ -56,11 +61,11 @@ export class ScopeService {
             `Permission '${permissionKey}' has no 'today' field configured`,
           );
         }
-        return { ...where, [field]: todayInTashkent() };
+        return andWhere(where, { [field]: todayInTashkent() }) as W;
       }
 
       case 'self':
-        return { ...where, userId: ctx.userId };
+        return andWhere(where, { userId: ctx.userId }) as W;
 
       default:
         throw AppErrors.invalidScope(`Unknown scope '${scope}' for '${permissionKey}'`);

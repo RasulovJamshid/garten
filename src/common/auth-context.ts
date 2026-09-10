@@ -1,3 +1,5 @@
+import { AppErrors } from './exceptions/app.exception';
+
 export type PermissionScope = 'all' | 'branch' | 'own_group' | 'today' | 'self';
 
 const SCOPE_BREADTH: Record<PermissionScope, number> = {
@@ -34,6 +36,31 @@ export class AuthContext {
 
   scopeFor(key: string): PermissionScope | undefined {
     return this.permissions.get(key);
+  }
+
+  /**
+   * The branch list a `branch`-scoped query must filter by. Empty means
+   * the account was never attached to a branch: fail loudly rather than
+   * compiling to `branchId: { in: [] }`, which returns an empty page and
+   * looks identical to "the kindergarten has no children".
+   */
+  requireBranchIds(): string[] {
+    if (this.branchIds.length === 0) {
+      throw AppErrors.noScopeAssignment(
+        'Your account has branch-limited access but is not attached to any branch',
+      );
+    }
+    return this.branchIds;
+  }
+
+  /** Same contract as requireBranchIds(), for `own_group` scope. */
+  requireOwnGroupIds(): string[] {
+    if (this.ownGroupIds.length === 0) {
+      throw AppErrors.noScopeAssignment(
+        'Your access is limited to your own groups, but you are not assigned as staff on any group',
+      );
+    }
+    return this.ownGroupIds;
   }
 
   requireScope(key: string): PermissionScope {

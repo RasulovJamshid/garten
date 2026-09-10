@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { RbacSafetyService } from '../rbac/rbac-safety.service';
+import { PermissionVersionService } from '../rbac/permission-version.service';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
@@ -17,6 +18,7 @@ export class RolesService {
     private readonly tenantPrisma: TenantPrisma,
     private readonly safety: RbacSafetyService,
     private readonly audit: AuditService,
+    private readonly permissionVersion: PermissionVersionService,
   ) {}
 
   async list(includeSystem: boolean) {
@@ -131,6 +133,10 @@ export class RolesService {
     }
 
     await this.tenantPrisma.db.role.delete({ where: { id } });
+    // Cache keys embed permissionsVersion — without this the change
+    // stays invisible for up to 60s (permission-version.service.ts).
+    await this.permissionVersion.bump(ctx.tenantId);
+
     await this.audit.log({
       userId: ctx.userId,
       action: 'role.delete',
@@ -204,6 +210,10 @@ export class RolesService {
       }
     });
 
+    // Cache keys embed permissionsVersion — without this the change
+    // stays invisible for up to 60s (permission-version.service.ts).
+    await this.permissionVersion.bump(ctx.tenantId);
+
     await this.audit.log({
       userId: ctx.userId,
       action: 'role.grant',
@@ -226,6 +236,10 @@ export class RolesService {
       create: { roleId: id, permissionKey: dto.key, scope: dto.scope, grantedBy: ctx.userId },
       update: { scope: dto.scope, grantedBy: ctx.userId },
     });
+
+    // Cache keys embed permissionsVersion — without this the change
+    // stays invisible for up to 60s (permission-version.service.ts).
+    await this.permissionVersion.bump(ctx.tenantId);
 
     await this.audit.log({
       userId: ctx.userId,
@@ -255,6 +269,10 @@ export class RolesService {
         await this.safety.assertNoSelfLockout(ctx, ctx.userId, tx);
       }
     });
+
+    // Cache keys embed permissionsVersion — without this the change
+    // stays invisible for up to 60s (permission-version.service.ts).
+    await this.permissionVersion.bump(ctx.tenantId);
 
     await this.audit.log({
       userId: ctx.userId,

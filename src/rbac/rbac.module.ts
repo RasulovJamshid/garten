@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PermissionCatalogSyncService } from './permission-catalog-sync.service';
 import { PermissionResolverService } from './permission-resolver.service';
 import { PermissionCacheService } from './permission-cache.service';
+import { PermissionVersionService } from './permission-version.service';
 import { PermissionGuard } from './permission.guard';
 import { ScopeService } from './scope.service';
 import { RbacSafetyService } from './rbac-safety.service';
@@ -20,6 +21,7 @@ import { PermissionsController } from './permissions.controller';
     PermissionCatalogSyncService,
     PermissionResolverService,
     PermissionCacheService,
+    PermissionVersionService,
     ScopeService,
     RbacSafetyService,
     PermissionGuard,
@@ -27,6 +29,7 @@ import { PermissionsController } from './permissions.controller';
   exports: [
     ScopeService,
     PermissionCacheService,
+    PermissionVersionService,
     PermissionResolverService,
     RbacSafetyService,
     PermissionGuard,

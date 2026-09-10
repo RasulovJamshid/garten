@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { Auth } from '../common/decorators/auth.decorator';
@@ -8,6 +8,7 @@ import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { SetAttendanceStatusDto } from './dto/set-attendance-status.dto';
 import { CorrectAttendanceDto } from './dto/correct-attendance.dto';
+import { AttendanceDayDto, AttendanceSummaryRowDto } from './dto/attendance-response.dto';
 
 @ApiTags('attendance')
 @Controller('attendance')
@@ -16,10 +17,14 @@ export class AttendanceController {
 
   @ApiOperation({
     summary: "Get today's attendance",
-    description: 'Filterable by groupId/branchId. Requires attendance:read.',
+    description:
+      'Filterable by groupId/branchId. Requires attendance:read. Returns only children who ' +
+      'already have a row for today — it is NOT the roster. To build a morning board, list the ' +
+      'roster from GET /children?status=active&groupId=… and merge these rows onto it by childId.',
   })
   @Get('today')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   today(
     @Auth() ctx: AuthContext,
     @Query('groupId') groupId?: string,
@@ -34,6 +39,7 @@ export class AttendanceController {
   })
   @Get('inside')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   inside(@Auth() ctx: AuthContext) {
     return this.attendance.inside(ctx);
   }
@@ -44,6 +50,7 @@ export class AttendanceController {
   })
   @Get('absent')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   absent(@Auth() ctx: AuthContext, @Query('date') date?: string) {
     return this.attendance.absent(ctx, date);
   }
@@ -54,6 +61,7 @@ export class AttendanceController {
   })
   @Get('not-picked-up')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   notPickedUp(@Auth() ctx: AuthContext) {
     return this.attendance.notPickedUp(ctx);
   }
@@ -64,6 +72,7 @@ export class AttendanceController {
   })
   @Get('calendar')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   calendar(
     @Auth() ctx: AuthContext,
     @Query('childId') childId: string,
@@ -79,6 +88,7 @@ export class AttendanceController {
   })
   @Get('summary')
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceSummaryRowDto] })
   summary(
     @Auth() ctx: AuthContext,
     @Query('groupId') groupId: string | undefined,
@@ -110,6 +120,7 @@ export class AttendanceController {
   })
   @Get()
   @RequirePermissions('attendance:read')
+  @ApiOkResponse({ type: [AttendanceDayDto] })
   list(
     @Auth() ctx: AuthContext,
     @Query('date') date?: string,
@@ -128,6 +139,7 @@ export class AttendanceController {
   })
   @Post('check-in')
   @RequirePermissions('attendance:checkin')
+  @ApiOkResponse({ type: AttendanceDayDto })
   checkIn(@Auth() ctx: AuthContext, @Body() dto: CheckInDto) {
     return this.attendance.checkIn(ctx, dto);
   }
@@ -139,6 +151,7 @@ export class AttendanceController {
   })
   @Post('check-out')
   @RequirePermissions('attendance:checkout')
+  @ApiOkResponse({ type: AttendanceDayDto })
   checkOut(@Auth() ctx: AuthContext, @Body() dto: CheckOutDto) {
     return this.attendance.checkOut(ctx, dto);
   }
@@ -151,6 +164,7 @@ export class AttendanceController {
   })
   @Post('status')
   @RequirePermissions('attendance:checkin')
+  @ApiOkResponse({ type: AttendanceDayDto })
   setStatus(@Auth() ctx: AuthContext, @Body() dto: SetAttendanceStatusDto) {
     return this.attendance.setStatus(ctx, dto);
   }
@@ -163,6 +177,7 @@ export class AttendanceController {
   })
   @Post(':id/correct')
   @RequirePermissions('attendance:correct')
+  @ApiOkResponse({ type: AttendanceDayDto })
   correct(@Auth() ctx: AuthContext, @Param('id') id: string, @Body() dto: CorrectAttendanceDto) {
     return this.attendance.correct(ctx, id, dto);
   }

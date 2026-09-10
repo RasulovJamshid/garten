@@ -181,6 +181,7 @@ Group the client action by category.
 |---|---|---|
 | `FORBIDDEN` | 403 | Lacks permission — hide/disable the action (§9) and show a "not allowed" toast. |
 | `OUT_OF_SCOPE` | 403 | Record outside the user's branch/group scope. Treat like not-found in the UI. |
+| `NO_SCOPE_ASSIGNMENT` | 403 | The account holds the permission but is assigned to no branch (or, for a teacher, no group). **Do not render an empty list** — say the account needs a branch/group assignment and point at an admin. |
 | `ROLE_PROTECTED` | 403 | Owner role can't be modified/deleted — block the action. |
 | `ROLE_IN_USE` | 409 | Users still hold this role; prompt to reassign first. |
 | `LAST_OWNER` | 409 | Can't remove the final active Owner — block. |
@@ -286,9 +287,46 @@ GET /children?page=1&limit=50&sort=lastName:asc&q=alisher&status=active
 
 - `page` is 1-based. `limit` default **50**, max **200**.
 - `sort` is `field:asc|desc`.
+- `sort` accepts a whitelisted field only; an unknown field is a `422 VALIDATION_FAILED`
+  rather than a silently ignored parameter. On `/children`: `lastName`, `firstName`,
+  `birthDate`, `status`, `createdAt`.
 - `q` is free-text search where supported; other query params are entity-specific filters
   (e.g. `groupId`, `status`, `hasDebt`, `hasMedicalAlert` on `/children`).
 - Drive tables from `meta` (`total`, `pages`) rather than counting `data.length`.
+
+### Child names — read this before wiring any list
+
+A child has **`firstName` / `lastName` / `middleName`. There is no `fullName` and no
+`name`.** (Guardians, pickup persons and staff *do* have `fullName` — children never do.)
+Compose the display name client-side.
+
+Where the child sits in the payload differs by resource, and mixing the two up is the usual
+cause of an "empty" name column:
+
+| Endpoint | Shape |
+|---|---|
+| `GET /children` | Child is the row: `data[i].firstName`, plus `groupId`/`groupName` |
+| `GET /children/:id` | Same fields, flat, plus `childGuardian[]` and `allergy[]` |
+| `GET /attendance/*` | Attendance row with the child **nested**: `row.child.firstName` |
+| `GET /reports/*`, `/payments` | Pre-joined display string: `child` / `childName` |
+
+`openapi.json` now carries the response schema for children, attendance and groups, so
+generate the client rather than hand-typing these.
+
+### Building the attendance board
+
+`GET /attendance/today` returns rows that **already exist for today** — it is not the
+roster, and first thing in the morning it is legitimately empty. Build the board from
+`GET /children?status=active&groupId=…` and merge attendance rows on by `childId`.
+
+Two things make a child absent from that roster, and neither is a bug:
+
+- **Status.** `POST /children` creates the child as `applicant`, never `active`.
+  `POST /children/:id/status` moves it to `active`.
+- **Group.** The child needs a current group assignment (`POST /groups/:id/children`).
+
+If the *whole* list is empty and the caller is a teacher or a branch-scoped user, check for
+`403 NO_SCOPE_ASSIGNMENT` before assuming there is no data — see §6.
 
 Pair this with TanStack Query using `[resource, params]` query keys so filters/pagination cache
 and invalidate cleanly.

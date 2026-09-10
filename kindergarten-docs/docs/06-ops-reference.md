@@ -12,7 +12,7 @@ Audit specification · error registry · configuration · non-functional require
 |---|---|
 | Auth | `auth.login`, `auth.login_failed`, `auth.logout`, `auth.password_reset`, `auth.session_revoked` |
 | RBAC | `role.create`, `role.update`, `role.delete`, `role.grant`, `role.revoke`, `user.role_assign`, `user.role_remove`, `user.override_set` |
-| Users | `user.create`, `user.update`, `user.activate`, `user.deactivate` |
+| Users | `user.create`, `user.update`, `user.activate`, `user.deactivate`, `user.branches_set` |
 | Children | `child.create`, `child.update`, `child.status_change`, `child.delete`, `child.group_transfer` |
 | Medical | `medical.read`, `medical.update`, `allergy.create`, `incident.create` |
 | Attendance | `attendance.correct` (never plain check-in — too high volume) |
@@ -84,6 +84,7 @@ Consolidated. `code` is the contract; `message` is English debug text; clients l
 | `ACCOUNT_INACTIVE` | 403 | User deactivated |
 | `FORBIDDEN` | 403 | Authenticated but lacks permission |
 | `OUT_OF_SCOPE` | 403 | Permission held, but record outside scope |
+| `NO_SCOPE_ASSIGNMENT` | 403 | Permission held with `branch`/`own_group` scope, but the user is attached to no branch / staffed on no group |
 | `ROLE_PROTECTED` | 403 | Owner role cannot be modified |
 | `ROLE_IN_USE` | 409 | Users still hold this role |
 | `LAST_OWNER` | 409 | Cannot remove the final Owner |

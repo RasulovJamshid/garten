@@ -22,6 +22,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "openapi": "ts-node scripts/generate-openapi.ts",
     "seed": "ts-node prisma/seed.ts",
     "seed:demo": "ts-node prisma/seed-demo.ts",
     "build:seed": "tsc -p tsconfig.seed.json",

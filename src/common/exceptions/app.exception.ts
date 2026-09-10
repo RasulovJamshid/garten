@@ -48,6 +48,16 @@ export const AppErrors = {
     new AppException('UNKNOWN_PERMISSION', message, 400),
   invalidScope: (message = 'Scope not allowed for that permission') =>
     new AppException('INVALID_SCOPE', message, 400),
+  /**
+   * The caller holds the permission, but the assignment its scope reads
+   * from is empty — a `branch`-scoped user attached to no branch, an
+   * `own_group`-scoped teacher who is not staff on any group. Without
+   * this the scope compiles to `{ in: [] }` and the endpoint answers
+   * 200 with zero rows, which reads to everyone as "there is no data"
+   * rather than "you are not assigned anywhere yet".
+   */
+  noScopeAssignment: (message = 'Your account is not assigned to any branch or group') =>
+    new AppException('NO_SCOPE_ASSIGNMENT', message, 403),
 
   validationFailed: (details?: unknown) =>
     new AppException('VALIDATION_FAILED', 'One or more fields are invalid', 422, details),

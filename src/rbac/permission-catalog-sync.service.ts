@@ -63,5 +63,30 @@ export class PermissionCatalogSyncService implements OnApplicationBootstrap {
     });
 
     this.logger.log(`Permission catalog synced: ${PERMISSION_CATALOG.length} keys`);
+    await this.warnAboutUngrantedKeys();
+  }
+
+  /**
+   * Fail-closed is right, silent is not. A key that no role holds is
+   * unreachable for every user in the tenant — the landing CMS shipped
+   * that way and every /landing route answered 403 for weeks, Owner
+   * included, because nothing said so out loud. A new permission is
+   * expected to appear here once, then disappear as soon as an admin
+   * grants it or a backfill migration does.
+   */
+  private async warnAboutUngrantedKeys(): Promise<void> {
+    const granted = await this.prisma.rolePermission.findMany({
+      distinct: ['permissionKey'],
+      select: { permissionKey: true },
+    });
+    const held = new Set(granted.map((g) => g.permissionKey));
+    const ungranted = PERMISSION_CATALOG.map((p) => p.key).filter((k) => !held.has(k));
+
+    if (ungranted.length > 0) {
+      this.logger.warn(
+        `${ungranted.length} permission(s) are granted to no role in any tenant — every endpoint ` +
+          `behind them returns 403 for everyone: ${ungranted.join(', ')}`,
+      );
+    }
   }
 }
