@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { RbacSafetyService } from '../rbac/rbac-safety.service';
 import { PermissionResolverService } from '../rbac/permission-resolver.service';
-import { PermissionVersionService } from '../rbac/permission-version.service';
 import { PasswordService } from '../auth/password.service';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
@@ -32,7 +31,6 @@ export class UsersService {
     private readonly resolver: PermissionResolverService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
-    private readonly permissionVersion: PermissionVersionService,
   ) {}
 
   async list(filters: { status?: string; branchId?: string }) {
@@ -197,8 +195,6 @@ export class UsersService {
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
 
-    await this.permissionVersion.bump(ctx.tenantId);
-
     await this.audit.log({
       userId: ctx.userId,
       action: 'user.branches_set',
@@ -245,8 +241,6 @@ export class UsersService {
     } else {
       await this.tenantPrisma.db.appUser.update({ where: { id }, data: { status: 'active' } });
     }
-
-    await this.permissionVersion.bump(ctx.tenantId);
 
     await this.audit.log({
       userId: ctx.userId,
@@ -331,8 +325,6 @@ export class UsersService {
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
 
-    await this.permissionVersion.bump(ctx.tenantId);
-
     await this.audit.log({
       userId: ctx.userId,
       action: 'user.role_assign',
@@ -394,8 +386,6 @@ export class UsersService {
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
 
-    await this.permissionVersion.bump(ctx.tenantId);
-
     await this.audit.log({
       userId: ctx.userId,
       action: 'user.role_assign',
@@ -422,8 +412,6 @@ export class UsersService {
       }
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
-
-    await this.permissionVersion.bump(ctx.tenantId);
 
     await this.audit.log({
       userId: ctx.userId,
@@ -483,8 +471,6 @@ export class UsersService {
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
 
-    await this.permissionVersion.bump(ctx.tenantId);
-
     await this.audit.log({
       userId: ctx.userId,
       action: 'user.override_set',
@@ -504,8 +490,6 @@ export class UsersService {
       });
       await this.safety.assertNoSelfLockout(ctx, id, tx);
     });
-
-    await this.permissionVersion.bump(ctx.tenantId);
 
     await this.audit.log({
       userId: ctx.userId,

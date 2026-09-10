@@ -30,6 +30,6 @@ WHERE r."is_system" = true
   AND r."code" IN ('owner', 'director', 'administrator')
 ON CONFLICT ("role_id", "permission_key") DO NOTHING;
 
--- Grants are cached per (user, tenant permissions_version); without this
--- bump the new rows stay invisible until the 60s LRU entry expires.
-UPDATE "tenant" SET "permissions_version" = "permissions_version" + 1;
+-- No explicit permissions_version bump here: trg_bump_perm_rp on
+-- role_permission (0_init) already bumps the owning tenant on every
+-- insert, which is exactly what the guard's cache key reads.
