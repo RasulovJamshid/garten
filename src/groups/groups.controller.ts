@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { Auth } from '../common/decorators/auth.decorator';
@@ -9,6 +9,7 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { AssignChildDto } from './dto/assign-child.dto';
 import { TransferChildDto } from './dto/transfer-child.dto';
 import { SetStaffDto } from './dto/set-staff.dto';
+import { GroupChildDto, GroupDto, GroupStaffDto } from './dto/group-response.dto';
 
 @ApiTags('groups')
 @Controller('groups')
@@ -21,6 +22,7 @@ export class GroupsController {
   })
   @Get()
   @RequirePermissions('group:read')
+  @ApiOkResponse({ type: [GroupDto] })
   list(
     @Auth() ctx: AuthContext,
     @Query('branchId') branchId?: string,
@@ -35,6 +37,7 @@ export class GroupsController {
   })
   @Post()
   @RequirePermissions('group:manage')
+  @ApiOkResponse({ type: GroupDto })
   create(@Auth() ctx: AuthContext, @Body() dto: CreateGroupDto) {
     return this.groups.create(ctx, dto);
   }
@@ -44,6 +47,7 @@ export class GroupsController {
   })
   @Get(':id')
   @RequirePermissions('group:read')
+  @ApiOkResponse({ type: GroupDto })
   get(@Auth() ctx: AuthContext, @Param('id') id: string) {
     return this.groups.findOneOrThrow(ctx, id);
   }
@@ -54,6 +58,7 @@ export class GroupsController {
   })
   @Patch(':id')
   @RequirePermissions('group:manage')
+  @ApiOkResponse({ type: GroupDto })
   update(@Auth() ctx: AuthContext, @Param('id') id: string, @Body() dto: UpdateGroupDto) {
     return this.groups.update(ctx, id, dto);
   }
@@ -64,8 +69,9 @@ export class GroupsController {
   })
   @Get(':id/children')
   @RequirePermissions('group:read')
-  children(@Param('id') id: string) {
-    return this.groups.childrenOf(id);
+  @ApiOkResponse({ type: [GroupChildDto] })
+  children(@Auth() ctx: AuthContext, @Param('id') id: string) {
+    return this.groups.childrenOf(ctx, id);
   }
 
   @ApiOperation({
@@ -78,6 +84,7 @@ export class GroupsController {
   })
   @Post(':id/children')
   @RequirePermissions('group:manage')
+  @ApiOkResponse({ type: [GroupChildDto] })
   assignChild(
     @Auth() ctx: AuthContext,
     @Param('id') id: string,
@@ -109,8 +116,9 @@ export class GroupsController {
   })
   @Get(':id/staff')
   @RequirePermissions('group:read')
-  staff(@Param('id') id: string) {
-    return this.groups.staffOf(id);
+  @ApiOkResponse({ type: GroupStaffDto })
+  staff(@Auth() ctx: AuthContext, @Param('id') id: string) {
+    return this.groups.staffOf(ctx, id);
   }
 
   @ApiOperation({
@@ -129,7 +137,7 @@ export class GroupsController {
   })
   @Get(':id/history')
   @RequirePermissions('group:read')
-  history(@Param('id') id: string) {
-    return this.groups.history(id);
+  history(@Auth() ctx: AuthContext, @Param('id') id: string) {
+    return this.groups.history(ctx, id);
   }
 }

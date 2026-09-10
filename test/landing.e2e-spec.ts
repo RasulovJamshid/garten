@@ -122,6 +122,15 @@ describe('Landing page CMS (e2e)', () => {
       expect(res.body.blocks).toBe(1);
     });
 
+    it('clears hasUnpublishedChanges once published', async () => {
+      // Regression: publish() stamps the page's updatedAt with the same
+      // instant as publishedAt. Left to Prisma's @updatedAt it would land a
+      // tick later and the Publish button would never go quiet.
+      const res = await auth(request(app.getHttpServer()).get(`${prefix}/landing`)).expect(200);
+      expect(res.body.hasUnpublishedChanges).toBe(false);
+      expect(res.body.publishedVersion).toBe(1);
+    });
+
     it('serves the published page anonymously, flattened to one locale', async () => {
       const res = await request(app.getHttpServer())
         .get(`${prefix}/public/landing/${TENANT_CODE}?lang=ru`)

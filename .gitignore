@@ -13,7 +13,9 @@ coverage/
 
 # data volumes / local artifacts
 /data/
-openapi.json
+# openapi.json is NOT ignored: main.ts and `npm run openapi` both generate it,
+# and the frontend generates its typed client from the committed copy. Ignoring
+# it meant every consumer was reading a stale local build (api-spec §1).
 
 # editor
 .vscode/

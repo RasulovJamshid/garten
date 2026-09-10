@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
+import { andWhere } from '../common/prisma-where';
 import { CreateChildDto } from './dto/create-child.dto';
 import { UpdateChildDto } from './dto/update-child.dto';
 import { ChildStatusDto } from './dto/child-status.dto';
@@ -11,10 +13,18 @@ export interface ChildListFilters {
   status?: string;
   groupId?: string;
   q?: string;
+  hasDebt?: boolean;
+  hasMedicalAlert?: boolean;
+  sort?: string;
   page: number;
   limit: number;
 }
 
+/**
+ * The row shape the children directory renders. `groupAssignment` is
+ * included (not just filtered on) so the table can show a group column
+ * without an N+1 — `child` has no groupId of its own.
+ */
 const CHILD_LIST_SELECT = {
   id: true,
   branchId: true,
@@ -22,9 +32,34 @@ const CHILD_LIST_SELECT = {
   lastName: true,
   middleName: true,
   birthDate: true,
+  gender: true,
   status: true,
   photoFileId: true,
+  groupAssignment: {
+    where: { effectiveTo: null },
+    select: { groupId: true, childGroup: { select: { id: true, name: true } } },
+    take: 1,
+  },
 } as const;
+
+/** Whitelist for `?sort=field:dir` — anything else is a 422, never silently ignored. */
+const SORTABLE_FIELDS = ['lastName', 'firstName', 'birthDate', 'status', 'createdAt'] as const;
+
+const DEFAULT_ORDER: Prisma.ChildOrderByWithRelationInput[] = [
+  { lastName: 'asc' },
+  { firstName: 'asc' },
+];
+
+function parseSort(sort?: string): Prisma.ChildOrderByWithRelationInput[] {
+  if (!sort) return DEFAULT_ORDER;
+  const [field, dir = 'asc'] = sort.split(':');
+  if (!(SORTABLE_FIELDS as readonly string[]).includes(field) || !['asc', 'desc'].includes(dir)) {
+    throw AppErrors.validationFailed({
+      sort: `Expected '<field>:asc|desc' where field is one of ${SORTABLE_FIELDS.join(', ')}`,
+    });
+  }
+  return [{ [field]: dir as Prisma.SortOrder }];
+}
 
 @Injectable()
 export class ChildrenService {
@@ -47,10 +82,12 @@ export class ChildrenService {
       case 'all':
         return {};
       case 'branch':
-        return { branchId: { in: ctx.branchIds } };
+        return { branchId: { in: ctx.requireBranchIds() } };
       case 'own_group':
         return {
-          groupAssignment: { some: { groupId: { in: ctx.ownGroupIds }, effectiveTo: null } },
+          groupAssignment: {
+            some: { groupId: { in: ctx.requireOwnGroupIds() }, effectiveTo: null },
+          },
         };
       default:
         throw AppErrors.invalidScope(`Unsupported scope '${scope}' for child:read`);
@@ -58,16 +95,36 @@ export class ChildrenService {
   }
 
   async list(ctx: AuthContext, filters: ChildListFilters) {
-    const where: Record<string, unknown> = { ...this.scopedWhere(ctx), deletedAt: null };
-    if (filters.status) where.status = filters.status;
+    // Every filter goes through andWhere, never `where.x =` — `groupId`
+    // and the own_group scope both target `groupAssignment` (prisma-where.ts).
+    let where: Record<string, unknown> = { deletedAt: null };
+    where = andWhere(where, this.scopedWhere(ctx));
+
+    if (filters.status) where = andWhere(where, { status: filters.status });
     if (filters.groupId) {
-      where.groupAssignment = { some: { groupId: filters.groupId, effectiveTo: null } };
+      where = andWhere(where, {
+        groupAssignment: { some: { groupId: filters.groupId, effectiveTo: null } },
+      });
+    }
+    if (filters.hasMedicalAlert !== undefined) {
+      where = andWhere(where, {
+        // Both branches filter deletedAt: a soft-deleted allergy is not an
+        // alert, so it must not make hasMedicalAlert=false miss the child.
+        allergy: filters.hasMedicalAlert
+          ? { some: { deletedAt: null } }
+          : { none: { deletedAt: null } },
+      });
     }
     if (filters.q) {
-      where.OR = [
-        { firstName: { contains: filters.q, mode: 'insensitive' } },
-        { lastName: { contains: filters.q, mode: 'insensitive' } },
-      ];
+      const contains = { contains: filters.q, mode: 'insensitive' as const };
+      where = andWhere(where, {
+        OR: [{ firstName: contains }, { lastName: contains }, { middleName: contains }],
+      });
+    }
+
+    if (filters.hasDebt !== undefined) {
+      const inDebt = await this.childIdsInDebt();
+      where = andWhere(where, { id: filters.hasDebt ? { in: inDebt } : { notIn: inDebt } });
     }
 
     const take = Math.min(filters.limit, 200);
@@ -77,7 +134,7 @@ export class ChildrenService {
       this.tenantPrisma.db.child.findMany({
         where,
         select: CHILD_LIST_SELECT,
-        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        orderBy: parseSort(filters.sort),
         take,
         skip,
       }),
@@ -85,14 +142,41 @@ export class ChildrenService {
     ]);
 
     return {
-      data,
+      data: data.map((c) => this.toListRow(c)),
       meta: { page: filters.page, limit: take, total, pages: Math.ceil(total / take) },
+    };
+  }
+
+  /**
+   * Balance is derived, never stored (debts.service.ts) — there is no
+   * `child.hasDebt` column to filter on, so `?hasDebt=` resolves to a set
+   * of ids from v_child_balance first. Raw SQL bypasses the tenant Prisma
+   * extension, hence the explicit tenant_id predicate.
+   */
+  private async childIdsInDebt(): Promise<string[]> {
+    const rows = await this.tenantPrisma.db.$queryRaw<{ child_id: string }[]>`
+      SELECT child_id FROM v_child_balance
+      WHERE tenant_id = ${this.tenantPrisma.tenantId}::uuid AND debt_tiyin > 0
+    `;
+    return rows.map((r) => r.child_id);
+  }
+
+  /** Flattens the current group assignment onto the row the client reads. */
+  private toListRow<
+    T extends { groupAssignment: { groupId: string; childGroup: { id: string; name: string } }[] },
+  >(c: T) {
+    const { groupAssignment, ...rest } = c;
+    const current = groupAssignment[0];
+    return {
+      ...rest,
+      groupId: current?.groupId ?? null,
+      groupName: current?.childGroup.name ?? null,
     };
   }
 
   async findOneOrThrow(ctx: AuthContext, id: string) {
     const child = await this.tenantPrisma.db.child.findFirst({
-      where: { id, ...this.scopedWhere(ctx), deletedAt: null },
+      where: andWhere({ id, deletedAt: null }, this.scopedWhere(ctx)),
       include: {
         childGuardian: {
           include: {
@@ -105,10 +189,17 @@ export class ChildrenService {
           where: { deletedAt: null },
           select: { allergen: true, severity: true, instruction: true },
         },
+        groupAssignment: {
+          where: { effectiveTo: null },
+          select: { groupId: true, childGroup: { select: { id: true, name: true } } },
+          take: 1,
+        },
       },
     });
     if (!child) throw AppErrors.notFound('Child not found');
-    return child;
+    // Same flattening as the list rows, so a profile header and a table
+    // row read `groupId`/`groupName` the same way.
+    return this.toListRow(child);
   }
 
   async create(ctx: AuthContext, dto: CreateChildDto) {

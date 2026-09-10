@@ -3,6 +3,7 @@ import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
+import { andWhere } from '../common/prisma-where';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AssignChildDto } from './dto/assign-child.dto';
@@ -22,14 +23,15 @@ export class GroupsService {
     const scope = ctx.scopeFor('group:read');
     if (!scope) throw AppErrors.forbidden("Missing permission: 'group:read'");
     if (scope === 'all') return {};
-    if (scope === 'branch') return { branchId: { in: ctx.branchIds } };
+    if (scope === 'branch') return { branchId: { in: ctx.requireBranchIds() } };
     throw AppErrors.invalidScope(`Unsupported scope '${scope}' for group:read`);
   }
 
   async list(ctx: AuthContext, filters: { branchId?: string; status?: string }) {
-    const where: Record<string, unknown> = { ...this.scopedWhere(ctx), deletedAt: null };
-    if (filters.branchId) where.branchId = filters.branchId;
-    if (filters.status) where.status = filters.status;
+    // `branchId` collides with the branch scope clause — AND, never assign.
+    let where = andWhere({ deletedAt: null }, this.scopedWhere(ctx));
+    if (filters.branchId) where = andWhere(where, { branchId: filters.branchId });
+    if (filters.status) where = andWhere(where, { status: filters.status });
 
     const groups = await this.tenantPrisma.db.childGroup.findMany({
       where,
@@ -51,7 +53,7 @@ export class GroupsService {
 
   async findOneOrThrow(ctx: AuthContext, id: string) {
     const group = await this.tenantPrisma.db.childGroup.findFirst({
-      where: { id, ...this.scopedWhere(ctx), deletedAt: null },
+      where: andWhere({ id, deletedAt: null }, this.scopedWhere(ctx)),
       include: { _count: { select: { groupAssignment: { where: { effectiveTo: null } } } } },
     });
     if (!group) throw AppErrors.notFound('Group not found');
@@ -108,7 +110,14 @@ export class GroupsService {
     return updated;
   }
 
-  async childrenOf(id: string) {
+  /**
+   * Takes ctx and goes through findOneOrThrow so the group itself is
+   * scope-checked first: these used to be reachable by id alone, which
+   * let a branch-scoped user read another branch's roster, staff list,
+   * or assignment history. Tenant isolation held; branch scope did not.
+   */
+  async childrenOf(ctx: AuthContext, id: string) {
+    await this.findOneOrThrow(ctx, id);
     const rows = await this.tenantPrisma.db.groupAssignment.findMany({
       where: { groupId: id, effectiveTo: null },
       include: {
@@ -180,7 +189,7 @@ export class GroupsService {
 
   async assignChild(ctx: AuthContext, groupId: string, dto: AssignChildDto, force: boolean) {
     await this.reassignChild(ctx, groupId, dto.childId, dto.effectiveDate, undefined, force);
-    return this.childrenOf(groupId);
+    return this.childrenOf(ctx, groupId);
   }
 
   async transfer(ctx: AuthContext, groupId: string, dto: TransferChildDto, force: boolean) {
@@ -188,10 +197,11 @@ export class GroupsService {
     // group is derived from the child's current assignment, matching the
     // documented { childId, toGroupId } body shape.
     await this.reassignChild(ctx, dto.toGroupId, dto.childId, dto.effectiveDate, dto.reason, force);
-    return this.childrenOf(dto.toGroupId);
+    return this.childrenOf(ctx, dto.toGroupId);
   }
 
-  async history(id: string) {
+  async history(ctx: AuthContext, id: string) {
+    await this.findOneOrThrow(ctx, id);
     return this.tenantPrisma.db.groupAssignment.findMany({
       where: { groupId: id },
       include: { child: { select: { firstName: true, lastName: true } } },
@@ -199,7 +209,8 @@ export class GroupsService {
     });
   }
 
-  async staffOf(id: string) {
+  async staffOf(ctx: AuthContext, id: string) {
+    await this.findOneOrThrow(ctx, id);
     const rows = await this.tenantPrisma.db.groupStaff.findMany({
       where: { groupId: id, assignedTo: null },
       include: { appUser: { select: { id: true, fullName: true } } },
@@ -248,6 +259,6 @@ export class GroupsService {
       newValue: { staff: dto },
     });
 
-    return this.staffOf(id);
+    return this.staffOf(ctx, id);
   }
 }

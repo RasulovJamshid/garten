@@ -91,6 +91,10 @@ export class UsersService {
   async update(ctx: AuthContext, id: string, dto: UpdateUserDto) {
     const before = await this.findOneOrThrow(id);
 
+    if (dto.branchIds) {
+      await this.setBranches(ctx, id, dto.branchIds);
+    }
+
     const data: Record<string, unknown> = {
       fullName: dto.fullName,
       phone: dto.phone,
@@ -119,6 +123,86 @@ export class UsersService {
     });
 
     return updated;
+  }
+
+  /**
+   * Branches used to be settable only at creation, which made a
+   * `branch`-scoped account attached to the wrong branch unfixable
+   * through the API — it returned an empty list forever and only a
+   * direct DB edit could repair it.
+   *
+   * user_role rows are per-branch (see create()), so the two must move
+   * together: dropping a branch drops the role grants that lived on it,
+   * and adding a branch re-grants every role the user already holds
+   * there. Anything else leaves a user with branch access and no role,
+   * or a role row pointing at a branch they cannot see.
+   */
+  private async setBranches(ctx: AuthContext, id: string, branchIds: string[]) {
+    const branches = await this.tenantPrisma.db.branch.findMany({
+      where: { id: { in: branchIds } },
+      select: { id: true },
+    });
+    if (branches.length !== branchIds.length) {
+      throw AppErrors.notFound('One or more branches do not exist in this tenant');
+    }
+
+    const [currentBranches, currentRoles] = await Promise.all([
+      this.tenantPrisma.db.userBranch.findMany({
+        where: { userId: id },
+        select: { branchId: true },
+      }),
+      this.tenantPrisma.db.userRole.findMany({
+        where: { userId: id },
+        select: { roleId: true },
+        distinct: ['roleId'],
+      }),
+    ]);
+
+    const before = currentBranches.map((b) => b.branchId);
+    const removed = before.filter((b) => !branchIds.includes(b));
+    const added = branchIds.filter((b) => !before.includes(b));
+    if (removed.length === 0 && added.length === 0) return;
+
+    const ownerRole = await this.tenantPrisma.db.role.findFirst({
+      where: { code: 'owner' },
+      select: { id: true },
+    });
+
+    await this.tenantPrisma.db.$transaction(async (tx) => {
+      if (removed.length > 0) {
+        await tx.userBranch.deleteMany({ where: { userId: id, branchId: { in: removed } } });
+        await tx.userRole.deleteMany({ where: { userId: id, branchId: { in: removed } } });
+      }
+      if (added.length > 0) {
+        await tx.userBranch.createMany({
+          data: added.map((branchId) => ({ userId: id, branchId })),
+        });
+        if (currentRoles.length > 0) {
+          await tx.userRole.createMany({
+            data: currentRoles.flatMap((r) =>
+              added.map((branchId) => ({
+                userId: id,
+                roleId: r.roleId,
+                branchId,
+                grantedBy: ctx.userId,
+              })),
+            ),
+            skipDuplicates: true,
+          });
+        }
+      }
+      if (ownerRole) await this.safety.assertNotLastOwner(tx, ctx.tenantId, ownerRole.id);
+      await this.safety.assertNoSelfLockout(ctx, id, tx);
+    });
+
+    await this.audit.log({
+      userId: ctx.userId,
+      action: 'user.branches_set',
+      entityType: 'user',
+      entityId: id,
+      oldValue: { branchIds: before },
+      newValue: { branchIds },
+    });
   }
 
   async setActive(ctx: AuthContext, id: string, active: boolean) {

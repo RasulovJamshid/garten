@@ -1,5 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ChildrenService } from './children.service';
 import { MedicalService } from './medical.service';
 import { DocumentsService } from './documents.service';
@@ -13,6 +19,8 @@ import { ChildStatusDto } from './dto/child-status.dto';
 import { CreateChildDocumentDto, UpdateChildDocumentDto } from './dto/child-document.dto';
 import { UpdateMedicalDto } from './dto/update-medical.dto';
 import { RecordConsentDto } from './dto/consent.dto';
+import { ChildDetailDto, ChildListResponseDto, ChildSummaryDto } from './dto/child-response.dto';
+import { parseBool } from '../common/parse-bool';
 
 @ApiTags('children')
 @Controller('children')
@@ -32,11 +40,23 @@ export class ChildrenController {
   })
   @Get()
   @RequirePermissions('child:read')
+  @ApiOkResponse({ type: ChildListResponseDto })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'groupId', required: false })
+  @ApiQuery({ name: 'q', required: false, description: 'Matches first, last, or middle name' })
+  @ApiQuery({ name: 'hasDebt', required: false, type: Boolean })
+  @ApiQuery({ name: 'hasMedicalAlert', required: false, type: Boolean })
+  @ApiQuery({ name: 'sort', required: false, example: 'lastName:asc' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
   list(
     @Auth() ctx: AuthContext,
     @Query('status') status?: string,
     @Query('groupId') groupId?: string,
     @Query('q') q?: string,
+    @Query('hasDebt') hasDebt?: string,
+    @Query('hasMedicalAlert') hasMedicalAlert?: string,
+    @Query('sort') sort?: string,
     @Query('page') page = '1',
     @Query('limit') limit = '50',
   ) {
@@ -44,6 +64,9 @@ export class ChildrenController {
       status,
       groupId,
       q,
+      hasDebt: parseBool(hasDebt, 'hasDebt'),
+      hasMedicalAlert: parseBool(hasMedicalAlert, 'hasMedicalAlert'),
+      sort,
       page: Number(page) || 1,
       limit: Number(limit) || 50,
     });
@@ -55,6 +78,12 @@ export class ChildrenController {
   })
   @Post()
   @RequirePermissions('child:create')
+  @ApiCreatedResponse({
+    type: ChildSummaryDto,
+    description:
+      'The new child is created with status `applicant` — it is NOT on any attendance screen ' +
+      'until POST /children/:id/status moves it to `active` and it is assigned to a group.',
+  })
   create(@Auth() ctx: AuthContext, @Body() dto: CreateChildDto) {
     return this.children.create(ctx, dto);
   }
@@ -65,6 +94,7 @@ export class ChildrenController {
   })
   @Get(':id')
   @RequirePermissions('child:read')
+  @ApiOkResponse({ type: ChildDetailDto })
   get(@Auth() ctx: AuthContext, @Param('id') id: string) {
     return this.children.findOneOrThrow(ctx, id);
   }
@@ -75,6 +105,7 @@ export class ChildrenController {
   })
   @Patch(':id')
   @RequirePermissions('child:update')
+  @ApiOkResponse({ type: ChildDetailDto })
   update(@Auth() ctx: AuthContext, @Param('id') id: string, @Body() dto: UpdateChildDto) {
     return this.children.update(ctx, id, dto);
   }

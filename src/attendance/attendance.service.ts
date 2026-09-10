@@ -3,6 +3,7 @@ import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { AuthContext } from '../common/auth-context';
+import { andWhere } from '../common/prisma-where';
 import { todayInTashkent, currentTimeInTashkent } from '../common/tashkent-date';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CheckInDto } from './dto/check-in.dto';
@@ -76,9 +77,9 @@ export class AttendanceService {
       case 'all':
         return {};
       case 'branch':
-        return { branchId: { in: ctx.branchIds } };
+        return { branchId: { in: ctx.requireBranchIds() } };
       case 'own_group':
-        return { groupId: { in: ctx.ownGroupIds } };
+        return { groupId: { in: ctx.requireOwnGroupIds() } };
       case 'today':
         return { attendanceDate: dateOnly(date ?? todayInTashkent()) };
       default:
@@ -92,12 +93,12 @@ export class AttendanceService {
 
   async today(ctx: AuthContext, groupId?: string, branchId?: string) {
     const date = todayInTashkent();
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx, date),
-      attendanceDate: dateOnly(date),
-    };
-    if (groupId) where.groupId = groupId;
-    if (branchId) where.branchId = branchId;
+    // andWhere, not assignment: `groupId`/`branchId` collide head-on with
+    // the own_group/branch scope clauses (prisma-where.ts).
+    let where: Record<string, unknown> = { attendanceDate: dateOnly(date) };
+    where = andWhere(where, this.scopedWhere(ctx, date));
+    if (groupId) where = andWhere(where, { groupId });
+    if (branchId) where = andWhere(where, { branchId });
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
       include: { child: this.childSelect },
@@ -116,16 +117,19 @@ export class AttendanceService {
       status?: string;
     },
   ) {
-    const where: Record<string, unknown> = { ...this.scopedWhere(ctx, filters.date) };
-    if (filters.date) where.attendanceDate = dateOnly(filters.date);
-    if (filters.groupId) where.groupId = filters.groupId;
-    if (filters.childId) where.childId = filters.childId;
-    if (filters.status) where.status = filters.status;
+    let where: Record<string, unknown> = {};
+    where = andWhere(where, this.scopedWhere(ctx, filters.date));
+    if (filters.date) where = andWhere(where, { attendanceDate: dateOnly(filters.date) });
+    if (filters.groupId) where = andWhere(where, { groupId: filters.groupId });
+    if (filters.childId) where = andWhere(where, { childId: filters.childId });
+    if (filters.status) where = andWhere(where, { status: filters.status });
     if (filters.from || filters.to) {
-      where.attendanceDate = {
-        ...(filters.from && { gte: dateOnly(filters.from) }),
-        ...(filters.to && { lte: dateOnly(filters.to) }),
-      };
+      where = andWhere(where, {
+        attendanceDate: {
+          ...(filters.from && { gte: dateOnly(filters.from) }),
+          ...(filters.to && { lte: dateOnly(filters.to) }),
+        },
+      });
     }
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
@@ -138,12 +142,10 @@ export class AttendanceService {
   /** "Currently inside" = checked in, not checked out, today. */
   async inside(ctx: AuthContext) {
     const date = todayInTashkent();
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx, date),
-      attendanceDate: dateOnly(date),
-      checkInAt: { not: null },
-      checkOutAt: null,
-    };
+    const where = andWhere(
+      { attendanceDate: dateOnly(date), checkInAt: { not: null }, checkOutAt: null },
+      this.scopedWhere(ctx, date),
+    );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
       include: { child: this.childSelect },
@@ -153,11 +155,10 @@ export class AttendanceService {
 
   async absent(ctx: AuthContext, date?: string) {
     const d = date ?? todayInTashkent();
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx, d),
-      attendanceDate: dateOnly(d),
-      status: { in: ['absent', 'sick', 'vacation', 'excused'] },
-    };
+    const where = andWhere(
+      { attendanceDate: dateOnly(d), status: { in: ['absent', 'sick', 'vacation', 'excused'] } },
+      this.scopedWhere(ctx, d),
+    );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
       include: { child: this.childSelect },
@@ -176,12 +177,10 @@ export class AttendanceService {
     const pastClosing = hour > closeHour || (hour === closeHour && minute >= closeMinute);
     if (!pastClosing) return [];
 
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx, date),
-      attendanceDate: dateOnly(date),
-      checkInAt: { not: null },
-      checkOutAt: null,
-    };
+    const where = andWhere(
+      { attendanceDate: dateOnly(date), checkInAt: { not: null }, checkOutAt: null },
+      this.scopedWhere(ctx, date),
+    );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
       include: { child: this.childSelect },
@@ -192,11 +191,10 @@ export class AttendanceService {
     const from = `${year}-${String(month).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month, 0).getDate();
     const to = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx),
-      childId,
-      attendanceDate: { gte: dateOnly(from), lte: dateOnly(to) },
-    };
+    const where = andWhere(
+      { childId, attendanceDate: { gte: dateOnly(from), lte: dateOnly(to) } },
+      this.scopedWhere(ctx),
+    );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
       orderBy: { attendanceDate: 'asc' },
@@ -204,11 +202,11 @@ export class AttendanceService {
   }
 
   async summary(ctx: AuthContext, groupId: string | undefined, from: string, to: string) {
-    const where: Record<string, unknown> = {
-      ...this.scopedWhere(ctx),
-      attendanceDate: { gte: dateOnly(from), lte: dateOnly(to) },
-    };
-    if (groupId) where.groupId = groupId;
+    let where = andWhere(
+      { attendanceDate: { gte: dateOnly(from), lte: dateOnly(to) } },
+      this.scopedWhere(ctx),
+    );
+    if (groupId) where = andWhere(where, { groupId });
 
     const rows = await this.tenantPrisma.db.attendanceDay.findMany({
       where,
