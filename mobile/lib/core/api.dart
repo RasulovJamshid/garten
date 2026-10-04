@@ -155,9 +155,10 @@ class ApiClient {
     String path, {
     String method = 'GET',
     Json? query,
-    Json? data,
+    Object? data,
     String? idempotencyKey,
     ResponseType? responseType,
+    bool returnResponse = false,
   }) async {
     // Only relative resource paths: bearer tokens must never follow arbitrary URLs.
     if (!path.startsWith('/') ||
@@ -170,7 +171,7 @@ class ApiClient {
     Future<Response<dynamic>> send() => dio.request(
       path,
       queryParameters: query,
-      data: data,
+      data: data is FormData ? data.clone() : data,
       options: Options(
         method: method,
         responseType: responseType,
@@ -185,7 +186,7 @@ class ApiClient {
       if (generation != _generation) {
         throw const ApiFailure('UNAUTHORIZED', 401);
       }
-      return response.data;
+      return returnResponse ? response : response.data;
     } on DioException catch (e) {
       if (e.response?.statusCode != 401 || generation != _generation) {
         throw failure(e);
@@ -199,7 +200,7 @@ class ApiClient {
         if (generation != _generation) {
           throw const ApiFailure('UNAUTHORIZED', 401);
         }
-        return response.data;
+        return returnResponse ? response : response.data;
       } on DioException catch (retry) {
         if (retry.response?.statusCode == 401 && generation == _generation) {
           await clear();

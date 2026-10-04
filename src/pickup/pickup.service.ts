@@ -205,8 +205,34 @@ export class PickupService {
    * child currently checked in. All-or-nothing boolean, not a data leak —
    * an unauthenticated attempt learns only `allowed: false`.
    */
-  async verify(childId: string, pickupPersonId?: string, pickupPermissionId?: string) {
+  async verify(
+    childId: string,
+    pickupPersonId?: string,
+    pickupPermissionId?: string,
+    guardianId?: string,
+  ) {
     await this.tenantPrisma.assertChild(childId, 'pickup:read');
+    if (guardianId) {
+      if (pickupPersonId || pickupPermissionId)
+        throw AppErrors.validationFailed('Choose either a guardian or an authorized pickup person');
+      const link = await this.tenantPrisma.db.childGuardian.findFirst({
+        where: { childId, guardianId, guardian: { deletedAt: null } },
+        select: { guardian: { select: { id: true, fullName: true, phone: true } } },
+      });
+      if (!link)
+        return { allowed: false, reason: 'PICKUP_NOT_AUTHORIZED', person: null, pickupName: null };
+      const attendance = await this.tenantPrisma.db.attendanceDay.findFirst({
+        where: { childId, attendanceDate: dateOnly(todayInTashkent()) },
+      });
+      const inside = Boolean(attendance?.checkInAt && !attendance.checkOutAt);
+      return {
+        allowed: inside,
+        reason: inside ? null : 'NOT_CHECKED_IN',
+        person: link.guardian,
+        guardianId,
+        pickupName: link.guardian.fullName,
+      };
+    }
     if (!pickupPersonId && !pickupPermissionId)
       throw AppErrors.validationFailed('Provide pickupPersonId or pickupPermissionId');
     const today = dateOnly(todayInTashkent());

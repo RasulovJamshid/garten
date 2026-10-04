@@ -23,6 +23,15 @@ export class CheckOutDto {
   @IsUUID()
   pickupPermissionId?: string;
 
+  @ApiProperty({
+    required: false,
+    format: 'uuid',
+    description: 'Guardian linked to this child; mutually exclusive with pickup person/permission.',
+  })
+  @IsOptional()
+  @IsUUID()
+  guardianId?: string;
+
   @ApiProperty({ required: false, description: 'Defaults to now' })
   @IsOptional()
   @IsDateString()

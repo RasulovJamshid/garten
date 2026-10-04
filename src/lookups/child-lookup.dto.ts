@@ -10,6 +10,8 @@ export const CHILD_LOOKUP_PERMISSIONS = [
   'charge:generate',
   'billing_rules:manage',
   'pickup:read',
+  'pickup:manage',
+  'pickup:temporary',
   'attendance:checkin',
 ] as const;
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../core/api.dart';
+import '../core/features.dart' show decimalMoney;
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'children.dart';
@@ -21,7 +22,7 @@ class _PaymentPageState extends State<PaymentPage> {
   bool busy = false, restoring = true, dirty = false;
   late String storageKey;
   Object? error;
-  bool initialized = false;
+  bool initialized = false, recoveryFailed = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -32,6 +33,11 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Future<void> restore() async {
+    setState(() {
+      restoring = true;
+      recoveryFailed = false;
+      error = null;
+    });
     final session = AppScope.of(context);
     storageKey =
         'payment:${session.api.dio.options.baseUrl}:${object(session.profile?['user'])['id']}';
@@ -39,17 +45,44 @@ class _PaymentPageState extends State<PaymentPage> {
       final saved = await session.api.secrets.read(storageKey);
       if (saved != null) {
         final data = object(jsonDecode(saved));
-        submission = object(data['payload']);
-        key = data['key'].toString();
-        child = object(data['child']);
-        method = submission!['method'].toString();
-        amount.text =
-            (BigInt.parse(submission!['amountTiyin'].toString()) ~/
-                    BigInt.from(100))
-                .toString();
+        final restored = object(data['payload']);
+        final restoredChild = object(data['child']);
+        final restoredKey = data['key'];
+        if (restoredKey is! String ||
+            restoredKey.isEmpty ||
+            restored['childId'] == null ||
+            restored['childId'] != restoredChild['id'] ||
+            (BigInt.tryParse(restored['amountTiyin']?.toString() ?? '') ??
+                    BigInt.zero) <=
+                BigInt.zero ||
+            ![
+              'cash',
+              'bank',
+              'card',
+              'online',
+              'other',
+            ].contains(restored['method']) ||
+            DateTime.tryParse(restored['paidAt']?.toString() ?? '') == null) {
+          throw const ApiFailure('INVALID_RESPONSE');
+        }
+        submission = restored;
+        key = restoredKey;
+        child = restoredChild;
+        method = restored['method'].toString();
+        amount.text = decimalMoney(restored['amountTiyin']);
+        note.text = restored['note']?.toString() ?? '';
         dirty = true;
+      } else {
+        submission = null;
+        child = null;
+        amount.clear();
+        note.clear();
+        method = 'cash';
+        key = const Uuid().v4();
+        dirty = false;
       }
     } catch (e) {
+      recoveryFailed = true;
       error = e;
     }
     if (mounted) setState(() => restoring = false);
@@ -63,7 +96,9 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Future<void> submit() async {
-    if (busy || !form.currentState!.validate()) return;
+    if (busy || restoring || recoveryFailed || !form.currentState!.validate()) {
+      return;
+    }
     if (child == null) {
       toast(context, tr(context, 'children'));
       return;
@@ -117,9 +152,19 @@ class _PaymentPageState extends State<PaymentPage> {
       // Validation errors are definitive rejection, so the operator can fix
       // fields. Timeouts/server errors keep the original operation intact.
       if (e is ApiFailure && [400, 422].contains(e.status)) {
-        await session.api.secrets.delete(storageKey);
-        submission = null;
-        key = const Uuid().v4();
+        try {
+          await session.api.secrets.delete(storageKey);
+          submission = null;
+          key = const Uuid().v4();
+        } catch (storageError) {
+          if (mounted) {
+            setState(() {
+              recoveryFailed = true;
+              error = storageError;
+            });
+          }
+          return;
+        }
       }
       if (mounted) setState(() => error = e);
     } finally {
@@ -148,6 +193,8 @@ class _PaymentPageState extends State<PaymentPage> {
       appBar: AppBar(title: Text(tr(context, 'recordPayment'))),
       body: restoring
           ? const Center(child: CircularProgressIndicator.adaptive())
+          : recoveryFailed
+          ? FailureView(error!, restore)
           : Form(
               key: form,
               child: ListView(

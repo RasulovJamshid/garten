@@ -53,30 +53,31 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.language_rounded, size: 18),
                         onPressed: () => AppScope.of(context).setLanguage(
                           AppScope.of(context).language == 'uz' ? 'ru' : 'uz',
                         ),
-                        child: const Text('O‘zbekcha / Русский'),
+                        label: const Text('O‘zbekcha / Русский'),
                       ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 28),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Image.asset(
                         'assets/logo-mark.png',
-                        width: 84,
-                        height: 84,
+                        width: 68,
+                        height: 68,
                         semanticLabel: 'Alishax Kids',
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       'Alishax Kids',
                       style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: navy,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     const SizedBox(height: 12),

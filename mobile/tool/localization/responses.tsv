@@ -1,0 +1,242 @@
+﻿accountingPeriod|Hisob davri|Расчётный период
+actionTaken|Ko‘rilgan chora|Принятые меры
+adhocFullName|Olib ketuvchining ismi|Имя забирающего
+adhocIdNumber|Olib ketuvchining hujjat raqami|Номер документа забирающего
+adhocPhone|Olib ketuvchining telefoni|Телефон забирающего
+adjustmentForChargeId|Tuzatilayotgan hisob|Корректируемое начисление
+allergy|Allergiya|Аллергия
+allowedScopes|Ruxsat etilgan doiralar|Допустимые области действия
+announcement|E’lon|Объявление
+announcementId|E’lon|Объявление
+appUser|Xodim|Сотрудник
+approvedBy|Tasdiqlagan xodim|Подтвердивший сотрудник
+assignedBy|Biriktirgan xodim|Назначивший сотрудник
+assignedFrom|Biriktirish boshi|Начало назначения
+assignedTo|Biriktirish oxiri|Окончание назначения
+attemptedAt|Urinish vaqti|Время попытки
+attempts|Urinishlar soni|Число попыток
+attendanceCorrection|Davomat tuzatishi|Исправление посещаемости
+attendanceDate|Davomat sanasi|Дата посещаемости
+attendanceDay|Davomat kuni|День посещаемости
+attendanceDayId|Davomat yozuvi|Запись посещаемости
+billable|Hisoblanadi|Подлежит оплате
+billingResolution|Hisoblash qarori|Решение по начислению
+billingRules|Hisoblash qoidalari|Правила начисления
+billingRulesId|Hisoblash qoidalari versiyasi|Версия правил начисления
+billingRun|Hisoblash jarayoni|Расчёт начислений
+billingRunId|Hisoblash jarayoni|Расчёт начислений
+billingWeight|Hisoblash ulushi|Вес начисления
+block|Blok|Блок
+blockedBot|Bot bloklangan|Бот заблокирован
+boundAt|Ulangan vaqt|Дата подключения
+bucket|Saqlash joyi|Хранилище
+calculationTrace|Hisoblash tafsilotlari|Подробности расчёта
+cancelReason|Bekor qilish sababi|Причина отмены
+category|Toifa|Категория
+changedAt|O‘zgartirish vaqti|Дата изменения
+changedBy|O‘zgartirgan xodim|Изменивший сотрудник
+charge|Hisob|Начисление
+chatId|Telegram suhbati|Чат Telegram
+checkInBy|Kelishni qayd etgan|Отметивший приход
+checkInNote|Kelish izohi|Примечание о приходе
+checkOutBy|Ketishni qayd etgan|Отметивший уход
+checkOutNote|Ketish izohi|Примечание об уходе
+checksum|Fayl nazorat yig‘indisi|Контрольная сумма файла
+childCount|Bolalar soni|Количество детей
+childDocument|Bolaning hujjati|Документ ребёнка
+childGroup|Bolaning guruhi|Группа ребёнка
+childGuardian|Bolaning ota-onasi|Родитель ребёнка
+childStatusHistory|Bolaning holatlari tarixi|История статусов ребёнка
+childTariff|Bolaning tarifi|Тариф ребёнка
+closedAt|Yopilgan vaqt|Дата закрытия
+closedBy|Yopgan xodim|Закрывший сотрудник
+committedAt|Tasdiqlangan vaqt|Дата подтверждения
+completedAt|Yakunlangan vaqt|Дата завершения
+config|Sozlamalar|Настройки
+correctedAt|Tuzatilgan vaqt|Дата исправления
+correctedBy|Tuzatgan xodim|Исправивший сотрудник
+createdBy|Yaratgan xodim|Создавший сотрудник
+dedupKey|Takrorlanish nazorati|Контроль дублирования
+deletedAt|O‘chirilgan vaqt|Дата удаления
+deliveredAt|Yetkazilgan vaqt|Дата доставки
+deprecated|Eskirgan|Устаревшее
+descriptionRu|Ruscha tavsif|Описание на русском
+descriptionUz|O‘zbekcha tavsif|Описание на узбекском
+diff|Farqlar|Различия
+docType|Hujjat turi|Тип документа
+documentTemplate|Hujjat andozasi|Шаблон документа
+error|Xatolik|Ошибка
+errors|Xatolar|Ошибки
+eventId|Voqea raqami|Идентификатор события
+expense|Xarajat|Расход
+expenseType|Xarajat turi|Тип расхода
+exportJob|Eksport jarayoni|Задание экспорта
+failedAttempts|Muvaffaqiyatsiz urinishlar|Неудачные попытки
+failedRows|Xato yozuvlar|Ошибочные записи
+featureFlag|Imkoniyat sozlamasi|Настройка возможности
+flagKey|Imkoniyat kaliti|Ключ возможности
+grantedAt|Ruxsat berilgan vaqt|Дата выдачи разрешения
+grantedBy|Ruxsat bergan xodim|Выдавший разрешение
+groupAssignment|Guruhga biriktirish|Зачисление в группу
+groupStaff|Guruh xodimlari|Сотрудники группы
+guardian|Ota-ona|Родитель
+guardianNotified|Ota-onaga xabar berilgan|Родитель уведомлён
+healthIncident|Sog‘liq bilan bog‘liq voqea|Случай, связанный со здоровьем
+holiday|Dam olish kuni|Выходной день
+idempotencyKey|Operatsiya raqami|Идентификатор операции
+importJob|Import jarayoni|Задание импорта
+ipAddress|IP manzil|IP-адрес
+isProtected|Himoyalangan|Защищённый
+isSystem|Tizimga tegishli|Системный
+landingBlock|Sayt bloki|Блок сайта
+landingPage|Sayt sahifasi|Страница сайта
+landingPageVersion|Sayt versiyasi|Версия сайта
+landingVersion|Sayt versiyasi|Версия сайта
+lastError|Oxirgi xatolik|Последняя ошибка
+lastLoginAt|Oxirgi kirish vaqti|Последний вход
+lockedUntil|Bloklash tugash vaqti|Заблокирован до
+logoFileId|Logotip|Логотип
+lookupValue|Ma’lumotnoma qiymati|Значение справочника
+medicalRecord|Tibbiy karta|Медицинская карта
+medication|Dori|Лекарство
+mimeType|Fayl turi|Тип файла
+newStatus|Yangi holat|Новый статус
+notification|Xabarnoma|Уведомление
+notificationRequest|Xabarnoma so‘rovi|Запрос уведомления
+notificationTemplate|Xabar andozasi|Шаблон уведомления
+objectKey|Saqlangan fayl manzili|Путь сохранённого файла
+occurredAt|Voqea vaqti|Время события
+oldStatus|Avvalgi holat|Предыдущий статус
+oldValue|Avvalgi qiymat|Предыдущее значение
+originalName|Fayl nomi|Имя файла
+otherCharge|Bog‘liq hisob|Связанное начисление
+otherPayment|Bog‘liq to‘lov|Связанный платёж
+pageId|Sahifa|Страница
+paidAmountTiyin|To‘langan summa|Оплаченная сумма
+params|Parametrlar|Параметры
+payload|So‘rov ma’lumotlari|Данные запроса
+payment|To‘lov|Платёж
+paymentAllocation|To‘lov taqsimoti|Распределение платежа
+paymentId|To‘lov|Платёж
+permGroup|Ruxsatlar guruhi|Группа разрешений
+permissionKey|Ruxsat|Разрешение
+permissionsVersion|Ruxsatlar versiyasi|Версия разрешений
+pickupPermission|Olib ketish ruxsati|Разрешение на выдачу
+previewData|Oldindan ko‘rish ma’lumotlari|Данные предпросмотра
+publishedAt|Nashr qilingan vaqt|Дата публикации
+publishedBy|Nashr qilgan xodim|Опубликовавший сотрудник
+publishedSnapshot|Nashr qilingan mazmun|Опубликованное содержимое
+queuedAt|Navbatga qo‘yilgan vaqt|Дата постановки в очередь
+readAt|O‘qilgan vaqt|Дата прочтения
+receiptFileId|Kvitansiya fayli|Файл квитанции
+recipientGuardianId|Qabul qiluvchi ota-ona|Родитель-получатель
+recipientUserId|Qabul qiluvchi xodim|Сотрудник-получатель
+renderedBody|Tayyor xabar matni|Готовый текст сообщения
+reopenReason|Qayta ochish sababi|Причина повторного открытия
+reopenedAt|Qayta ochilgan vaqt|Дата повторного открытия
+reopenedBy|Qayta ochgan xodim|Повторно открывший сотрудник
+reportKey|Hisobot turi|Тип отчёта
+reversalReason|Hisobni bekor qilish sababi|Причина сторнирования
+revokeReason|Ruxsatni bekor qilish sababi|Причина отзыва
+revokedAt|Bekor qilingan vaqt|Дата отзыва
+role|Rol|Роль
+rolePermission|Rol ruxsati|Разрешение роли
+sensitive|Maxfiy|Конфиденциальное
+sentAt|Yuborilgan vaqt|Дата отправки
+seo|Qidiruv va ulashish sozlamalari|Настройки поиска и предпросмотра
+setting|Sozlama|Настройка
+sizeBytes|Fayl hajmi|Размер файла
+slug|Qisqa manzil|Короткий адрес
+snapshot|Saqlangan ma’lumotlar|Сохранённые данные
+sortOrder|Saralash tartibi|Порядок сортировки
+sourceChargeId|Dastlabki hisob|Исходное начисление
+sourcePaymentId|Dastlabki to‘lov|Исходный платёж
+staffRole|Xodim roli|Роль сотрудника
+statusId|Holat|Статус
+statusKind|Holat turi|Тип статуса
+success|Muvaffaqiyatli|Успешно
+syncedAt|Sinxronlash vaqti|Дата синхронизации
+systemKind|Tizim turi|Системный тип
+tariff|Tarif|Тариф
+tariffSnapshot|Hisoblashdagi tarif|Тариф на момент расчёта
+telegramBinding|Telegram ulanishi|Подключение Telegram
+telegramLinkToken|Telegram taklifi|Приглашение в Telegram
+telegramPhone|Telegram telefoni|Телефон Telegram
+telegramUsername|Telegram nomi|Имя в Telegram
+tenant|Tashkilot|Организация
+tenantId|Tashkilot|Организация
+totalRows|Jami yozuvlar|Всего записей
+totalTiyin|Jami summa|Общая сумма
+traceId|So‘rov raqami|Идентификатор запроса
+unboundAt|Uzilgan vaqt|Дата отключения
+updatedAt|Yangilangan vaqt|Дата обновления
+updatedBy|Yangilagan xodim|Обновивший сотрудник
+uploadedBy|Faylni yuklagan xodim|Загрузивший сотрудник
+usedAt|Foydalanilgan vaqt|Дата использования
+userAgent|Qurilma ma’lumotlari|Данные устройства
+userBranch|Xodim filiali|Филиал сотрудника
+userPermissionOverride|Xodimning maxsus ruxsati|Индивидуальное разрешение сотрудника
+userRole|Xodim roli|Роль сотрудника
+userSession|Kirish seansi|Сеанс входа
+validRows|To‘g‘ri yozuvlar|Корректные записи
+valueBp|Foiz (bazis punkt)|Процент (базисные пункты)
+valueTiyin|Qiymat|Сумма
+verifiedAt|Tasdiqlangan vaqt|Дата подтверждения
+verifiedBy|Tasdiqlagan xodim|Подтвердивший сотрудник
+withdrawalDate|Ketish sanasi|Дата выбытия
+activeChildren|Faol bolalar|Активные дети
+currentlyInside|Hozir bog‘chada|Сейчас в садике
+absentToday|Bugun kelmaganlar|Отсутствуют сегодня
+notPickedUpYet|Hali olib ketilmaganlar|Ещё не забрали
+unboundGuardianCount|Telegramga ulanmagan ota-onalar|Родители без Telegram
+telegramBoundRate|Telegram ulanishi (%)|Подключение к Telegram (%)
+telegramBound|Telegramga ulanganlar|Подключены к Telegram
+telegramGuardianTotal|Jami ota-onalar|Всего родителей
+revenueThisMonthTiyin|Shu oydagi tushum|Доход за месяц
+expensesThisMonthTiyin|Shu oydagi xarajat|Расходы за месяц
+paymentsToday|Bugungi to‘lovlar|Платежи сегодня
+chargesThisMonthTiyin|Shu oydagi hisoblar|Начисления за месяц
+unpaidExpenses|To‘lanmagan xarajatlar|Неоплаченные расходы
+openPeriod|Ochiq hisob davri|Открытый расчётный период
+count|Soni|Количество
+rows|Yozuvlar|Записи
+columns|Ustunlar|Столбцы
+header|Ustun nomi|Название столбца
+issuedAt|Hisob berilgan vaqt|Дата начисления
+chargedTiyin|Hisoblangan summa|Начисленная сумма
+paidTiyin|To‘langan summa|Оплаченная сумма
+debtTiyin|Qarz summasi|Сумма задолженности
+debt|Qarzdorlik|Задолженность
+charged|Hisoblangan|Начислено
+awaiting|Kutilmoqda|Ожидает
+recordDetails|Yozuv tafsilotlari|Сведения о записи
+onlyInA|Faqat birinchi rolda|Только в первой роли
+onlyInB|Faqat ikkinchi rolda|Только во второй роли
+differentScope|Qo‘llanish doirasi farqlari|Различия области действия
+advanceBalanceTiyin|Avans qoldig‘i|Остаток аванса
+attendedDays|Kelgan kunlar|Дни посещения
+billableDays|Hisoblanadigan kunlar|Оплачиваемые дни
+byGroup|Guruhlar bo‘yicha|По группам
+currentChargeTiyin|Joriy hisob|Текущее начисление
+currentDebtTiyin|Joriy qarz|Текущая задолженность
+d1_7|1–7 kun|1–7 дней
+d8_30|8–30 kun|8–30 дней
+d30plus|30 kundan ortiq|Более 30 дней
+end|Tugashi|Окончание
+enrollmentWindows|Qabul davrlari|Периоды зачисления
+fixedDiscountsTiyin|Belgilangan chegirmalar|Фиксированные скидки
+forceFullTariff|To‘liq tarifni qo‘llash|Применить полный тариф
+grants|Berilgan ruxsatlar|Выданные разрешения
+groupName|Guruh nomi|Название группы
+lines|Hisob satrlari|Строки начисления
+notOverdue|Muddati o‘tmagan|Без просрочки
+overdueAmountTiyin|Muddati o‘tgan qarz|Просроченная задолженность
+percentDiscountsBp|Foizli chegirmalar|Процентные скидки
+permissionCount|Ruxsatlar soni|Количество разрешений
+previousDebtTiyin|Avvalgi qarz|Предыдущая задолженность
+recorded|Qayd etilgan|Записано
+start|Boshlanishi|Начало
+totalDebtTiyin|Jami qarz|Общая задолженность
+totalPaidTiyin|Jami to‘langan|Всего оплачено
+trace|Hisoblash qadamlari|Этапы расчёта
+userCount|Xodimlar soni|Количество сотрудников

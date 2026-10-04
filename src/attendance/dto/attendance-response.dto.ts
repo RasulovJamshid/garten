@@ -66,6 +66,9 @@ export class AttendanceDayDto {
   @ApiProperty({ required: false, nullable: true, format: 'uuid' })
   pickupPersonId!: string | null;
 
+  @ApiProperty({ required: false, nullable: true, format: 'uuid' })
+  pickupGuardianId!: string | null;
+
   @ApiProperty({ description: 'Whether this day counts toward billing' })
   billable!: boolean;
 

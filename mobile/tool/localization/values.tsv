@@ -1,0 +1,162 @@
+﻿1000_som|1 000 so‘mgacha|До 1 000 сум
+about|Biz haqimizda|О нас
+absent|Kelmagan|Отсутствует
+actual_working_days|Haqiqiy ish kunlari|Фактические рабочие дни
+adjust_next_period|Keyingi davrda tuzatish|Скорректировать в следующем периоде
+all|Barchasi|Все
+anaphylactic|Anafilaktik|Анафилактическая
+applicant|Qabulga ariza bergan|Заявитель
+archived|Arxivlangan|В архиве
+arrears|Keyingi to‘lov|Оплата после периода
+attendance:checkin|Kelishni qayd etish|Отметка прихода
+attendance_based|Davomat asosida|По посещаемости
+bank|Bank o‘tkazmasi|Банковский перевод
+bankers|Juft songacha yaxlitlash|Округление к ближайшему чётному
+billing_rules:manage|Hisoblash qoidalarini boshqarish|Управление правилами начисления
+birth_certificate|Tug‘ilganlik guvohnomasi|Свидетельство о рождении
+branch|Filial|Филиал
+calendar_days|Taqvim kunlari|Календарные дни
+card|Karta|Карта
+cash|Naqd pul|Наличные
+ceil|Yuqoriga yaxlitlash|Округление вверх
+charge:generate|Hisoblarni shakllantirish|Формирование начислений
+charge:read|Hisoblarni ko‘rish|Просмотр начислений
+checkInAt|Kelish vaqti|Время прихода
+checkOutAt|Ketish vaqti|Время ухода
+child:read|Bolalarni ko‘rish|Просмотр детей
+children|Bolalar|Дети
+closed|Yopilgan|Закрыт
+cold_water|Sovuq suv|Холодная вода
+compound|Ketma-ket qo‘llash|Последовательное применение
+consent|Rozilik|Согласие
+contacts|Aloqa ma’lumotlari|Контакты
+contract|Shartnoma|Договор
+cta|Harakatga chaqiruv|Призыв к действию
+deny|Taqiqlash|Запретить
+early_departure|Erta ketgan|Ранний уход
+electricity|Elektr energiyasi|Электроэнергия
+emergency|Favqulodda holat|Экстренная ситуация
+excused|Uzrli sabab|Уважительная причина
+extra_class|Qo‘shimcha dars|Дополнительное занятие
+faq|Ko‘p so‘raladigan savollar|Частые вопросы
+features|Imkoniyatlar|Возможности
+female|Qiz|Девочка
+fixed|Belgilangan summa|Фиксированная сумма
+flat_monthly|Bir xil oylik to‘lov|Фиксированная ежемесячная оплата
+floor|Pastga yaxlitlash|Округление вниз
+full_day|To‘liq kun|Полный день
+full_month|To‘liq oy|Полный месяц
+full_tariff|To‘liq tarif|Полный тариф
+gallery|Galereya|Галерея
+gas|Gaz|Газ
+graduated|Bitirgan|Выпускник
+grant|Ruxsat berish|Разрешить
+group_based|Guruh asosida|По группе
+guardians|Ota-onalar|Родители
+half_day|Yarim kun|Полдня
+half_up|Yarmini yuqoriga yaxlitlash|Округление половины вверх
+heating|Isitish|Отопление
+hero|Asosiy banner|Главный баннер
+high|Yuqori|Высокий
+hot_water|Issiq suv|Горячая вода
+html|Veb sahifa (HTML)|Веб-страница (HTML)
+internal|Ichki|Внутренний
+internet|Internet|Интернет
+json|Ma’lumot fayli (JSON)|Файл данных (JSON)
+largest_only|Faqat eng kattasi|Только наибольшая
+late|Kechikkan|Опоздание
+low|Past|Низкий
+male|O‘g‘il|Мальчик
+manual_only|Faqat qo‘lda|Только вручную
+meal|Ovqatlanish|Питание
+medical_certificate|Tibbiy ma’lumotnoma|Медицинская справка
+medical_storage|Tibbiy ma’lumotlarni saqlash|Хранение медицинских данных
+mild|Yengil|Лёгкая
+min_charge|Eng kam hisob|Минимальное начисление
+mobile_access|Mobil kirish|Мобильный доступ
+moderate|O‘rtacha|Умеренная
+monthly_fixed|Belgilangan oylik to‘lov|Фиксированная месячная оплата
+normal|Odatdagi|Обычный
+online|Onlayn|Онлайн
+other|Boshqa|Другое
+own_group|O‘z guruhi|Своя группа
+parent_passport|Ota-onaning pasporti|Паспорт родителя
+payment:create|To‘lovni qayd etish|Регистрация платежа
+payment:read|To‘lovlarni ko‘rish|Просмотр платежей
+pdf|Hujjat (PDF)|Документ (PDF)
+per_attended_day|Kelgan kunlar bo‘yicha|За дни посещения
+per_working_day|Ish kunlari bo‘yicha|За рабочие дни
+percent|Foiz|Процент
+permanent|Doimiy|Постоянное
+personal_data|Shaxsiy ma’lumotlar|Персональные данные
+photography|Suratga olish|Фотосъёмка
+pickup:read|Olib ketish ruxsatlarini ko‘rish|Просмотр разрешений на выдачу
+present|Kelgan|Присутствует
+pricing|Narxlar|Цены
+registration_fee|Ro‘yxatdan o‘tish to‘lovi|Регистрационный взнос
+rent|Ijara|Аренда
+reverse_and_reissue_if_open|Ochiq davrda bekor qilib qayta yaratish|Сторнировать и пересоздать в открытом периоде
+security|Xavfsizlik|Охрана
+self|O‘zi|Себя
+severe|Og‘ir|Тяжёлая
+sick|Kasallik sababli|По болезни
+som|So‘m|Сум
+staff|Xodimlar|Сотрудники
+stats|Statistika|Статистика
+sum|Yig‘indi|Сумма
+suspended|Vaqtincha to‘xtatilgan|Приостановлен
+teachers|Tarbiyachilar|Воспитатели
+telegram|Telegram|Telegram
+telephone|Telefon aloqasi|Телефонная связь
+temporarily_absent|Vaqtincha kelmaydi|Временно отсутствует
+temporary|Vaqtinchalik|Временное
+testimonials|Fikrlar|Отзывы
+tiyin|Tiyin|Тийин
+transport|Transport|Транспорт
+vacation|Ta’til|Отпуск
+waste|Chiqindi olib ketish|Вывоз отходов
+withdrawn|Ketgan|Выбыл
+xlsx|Jadval (Excel)|Таблица (Excel)
+zero|Nol hisoblash|Нулевое начисление
+queued|Navbatda|В очереди
+processing|Bajarilmoqda|Выполняется
+completed|Yakunlangan|Завершено
+failed|Xatolik yuz berdi|Ошибка
+sent|Yuborilgan|Отправлено
+delivered|Yetkazilgan|Доставлено
+cancelled|Bekor qilingan|Отменено
+open|Ochiq|Открыт
+draft|Loyiha|Черновик
+paid|To‘langan|Оплачено
+unpaid|To‘lanmagan|Не оплачено
+verified|Tasdiqlangan|Подтверждено
+revoked|Bekor qilingan|Отозвано
+preview|Oldindan ko‘rish|Предпросмотр
+committed|Tasdiqlangan|Подтверждено
+discarded|Bekor qilingan|Отменено
+valid|To‘g‘ri|Корректно
+invalid_status|Xato|Некорректно
+validated|Tekshirilgan|Проверено
+skipped|O‘tkazib yuborilgan|Пропущено
+not_required|Talab qilinmaydi|Не требуется
+father|Ota|Отец
+mother|Ona|Мать
+grandmother|Buvi|Бабушка
+grandfather|Bobo|Дедушка
+uncle|Amaki / tog‘a|Дядя
+aunt|Amma / xola|Тётя
+sibling|Aka-uka / opa-singil|Брат / сестра
+owner|Egasi|Владелец
+director|Direktor|Директор
+administrator|Administrator|Администратор
+accountant|Buxgalter|Бухгалтер
+teacher|Tarbiyachi|Воспитатель
+assistant_teacher|Yordamchi tarbiyachi|Помощник воспитателя
+reception|Qabulxona|Приёмная
+nurse|Hamshira|Медсестра
+child_arrived|Bola keldi|Ребёнок пришёл
+child_departed|Bola ketdi|Ребёнок ушёл
+payment_received|To‘lov qabul qilindi|Платёж получен
+charge_created|Hisob yaratildi|Начисление создано
+debt_reminder|Qarz eslatmasi|Напоминание о задолженности
+event_reminder|Voqea eslatmasi|Напоминание о событии

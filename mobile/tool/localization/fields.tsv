@@ -1,0 +1,217 @@
+﻿action|Amal|Действие
+active|Faol|Активен
+address|Manzil|Адрес
+against|Taqqoslanadigan versiya|Версия для сравнения
+ageMaxMonths|Eng katta yosh (oy)|Максимальный возраст (месяцев)
+ageMinMonths|Eng kichik yosh (oy)|Минимальный возраст (месяцев)
+ageing|Qarz muddati|Срок задолженности
+allergen|Allergen|Аллерген
+allergies|Allergiyalar|Аллергии
+allocations|To‘lov taqsimoti|Распределение платежа
+amountTiyin|Summa|Сумма
+appliesTo|Qo‘llaniladigan xizmat|Применяется к услуге
+applyBeforeAttendance|Davomatdan oldin qo‘llash|Применить до учёта посещаемости
+assignmentId|Biriktirish|Назначение
+assistantTeacherId|Yordamchi tarbiyachi|Помощник воспитателя
+at|Sana va vaqt|Дата и время
+attachmentFileId|Ilova fayli|Файл вложения
+attendanceByKind|Xizmat bo‘yicha davomat|Посещаемость по услугам
+audienceIds|Qabul qiluvchilar|Получатели
+audienceType|Auditoriya turi|Тип аудитории
+bankDetails|Bank rekvizitlari|Банковские реквизиты
+bankRef|Bank operatsiyasi raqami|Номер банковской операции
+billableStatuses|Hisoblanadigan davomat holatlari|Оплачиваемые статусы посещаемости
+billingMonth|Hisob oyi|Месяц начисления
+billingTiming|Hisoblash vaqti|Время начисления
+billingYear|Hisob yili|Год начисления
+birthDate|Tug‘ilgan sana|Дата рождения
+blocks|Bloklar|Блоки
+bloodType|Qon guruhi|Группа крови
+body|Xabar matni|Текст сообщения
+bodyRu|Ruscha matn|Текст на русском
+bodyUz|O‘zbekcha matn|Текст на узбекском
+branchId|Filial|Филиал
+branchIds|Filiallar|Филиалы
+canonicalUrl|Sahifaning asosiy manzili|Основной адрес страницы
+capAtFullTariff|To‘liq tarifdan oshirmaslik|Не превышать полный тариф
+capacity|Sig‘im|Вместимость
+channel|Yuborish kanali|Канал отправки
+chargeId|Hisob|Начисление
+childId|Bola|Ребёнок
+chronicConditions|Surunkali kasalliklar|Хронические заболевания
+clinic|Poliklinika|Поликлиника
+closedPeriodPolicy|Yopiq davr qoidasi|Правило для закрытого периода
+code|Kod|Код
+consentId|Rozilik|Согласие
+consentType|Rozilik turi|Тип согласия
+content|Mazmun|Содержимое
+contractNumber|Shartnoma raqami|Номер договора
+currency|Valyuta|Валюта
+currentPassword|Amaldagi parol|Текущий пароль
+data|Ma’lumotlar|Данные
+date|Sana|Дата
+defaultLanguage|Standart til|Язык по умолчанию
+description|Tavsif|Описание
+discount|Chegirma|Скидка
+discountId|Chegirma|Скидка
+displayName|Ko‘rinadigan nom|Отображаемое имя
+divisor|Hisoblash bo‘luvchisi|Делитель расчёта
+divisorRespectsEnrollmentWindow|Qabul davrini hisobga olish|Учитывать период зачисления
+docId|Hujjat|Документ
+doctorName|Shifokor ismi|Имя врача
+doctorPhone|Shifokor telefoni|Телефон врача
+dosage|Dori dozasi|Дозировка
+dueDate|To‘lov muddati|Срок оплаты
+effect|Ruxsat natijasi|Действие разрешения
+effectiveDate|Kuchga kirish sanasi|Дата вступления в силу
+effectiveFrom|Amal qilish boshlanishi|Начало действия
+effectiveTo|Amal qilish tugashi|Окончание действия
+email|Elektron pochta|Электронная почта
+emergencyInstructions|Favqulodda holat ko‘rsatmalari|Инструкции для экстренных случаев
+en|Inglizcha|Английский
+enabled|Yoqilgan|Включено
+enrollmentDate|Qabul sanasi|Дата зачисления
+enrollmentMidMonth|Oy o‘rtasida qabul qilish|Зачисление в середине месяца
+entity|Obyekt|Объект
+entityId|Obyekt raqami|Идентификатор объекта
+entityType|Obyekt turi|Тип объекта
+evidenceFileId|Tasdiqlovchi fayl|Подтверждающий файл
+expiresAt|Muddati tugash vaqti|Срок действия до
+expiryDate|Muddati tugash sanasi|Дата окончания срока
+field|Maydon|Поле
+file|Fayl|Файл
+fileId|Fayl|Файл
+fileIds|Fayllar|Файлы
+firstName|Ism|Имя
+fixedDivisor|Belgilangan bo‘luvchi|Фиксированный делитель
+floorTiyin|Eng kichik summa|Минимальная сумма
+force|Majburiy bajarish|Принудительное выполнение
+format|Format|Формат
+from|Boshlanish sanasi|Дата начала
+fullName|To‘liq ism|Полное имя
+gender|Jins|Пол
+granted|Rozilik berilgan|Согласие дано
+grantedByGuardianId|Rozilik bergan ota-ona|Родитель, давший согласие
+group|Guruh|Группа
+groupId|Guruh|Группа
+guardianId|Ota-ona|Родитель
+hasDebt|Qarzi bor|Есть задолженность
+hasMedicalAlert|Tibbiy ogohlantirish bor|Есть медицинское предупреждение
+healthObservation|Sog‘liq kuzatuvi|Наблюдение за здоровьем
+holidayDate|Dam olish sanasi|Дата выходного дня
+id|Raqam|Идентификатор
+idDocNumber|Shaxsiy hujjat raqami|Номер удостоверения личности
+idDocType|Shaxsiy hujjat turi|Тип удостоверения личности
+importJobId|Import jarayoni|Задание импорта
+includeAmounts|Summalarni kiritish|Включить суммы
+includeDeprecated|Eskirganlarini ko‘rsatish|Включить устаревшие
+includeSystem|Tizimdagilarni ko‘rsatish|Включить системные
+instruction|Ko‘rsatma|Инструкция
+invoiceNumber|Hisob-faktura raqami|Номер счёта
+isEmergencyContact|Favqulodda aloqa|Контакт для экстренных случаев
+isPayer|To‘lovchi|Плательщик
+isPrimaryContact|Asosiy aloqa|Основной контакт
+isVisible|Ko‘rinadigan|Видимый
+isWorking|Ish kuni|Рабочий день
+issueDate|Berilgan sana|Дата выдачи
+key|Kalit|Ключ
+kind|Xizmat turi|Тип услуги
+language|Til|Язык
+lastName|Familiya|Фамилия
+limit|Yozuvlar chegarasi|Лимит записей
+mainTeacherId|Asosiy tarbiyachi|Основной воспитатель
+medications|Dorilar|Лекарства
+method|To‘lov usuli|Способ оплаты
+middleName|Otasining ismi|Отчество
+minAmountTiyin|Eng kam summa|Минимальная сумма
+minChargeTiyin|Eng kam hisob|Минимальное начисление
+mode|Hisoblash usuli|Режим расчёта
+month|Oy|Месяц
+multipleFixed|Bir nechta qat’iy chegirma|Несколько фиксированных скидок
+multiplePercent|Bir nechta foizli chegirma|Несколько процентных скидок
+name|Nom|Название
+nameRu|Ruscha nom|Название на русском
+nameUz|O‘zbekcha nom|Название на узбекском
+newPassword|Yangi parol|Новый пароль
+newValue|Yangi qiymat|Новое значение
+noAttendanceBehaviour|Davomat bo‘lmagandagi qoida|Правило при отсутствии посещаемости
+nonBillableStatuses|Hisoblanmaydigan holatlar|Неоплачиваемые статусы
+note|Izoh|Примечание
+number|Raqam|Номер
+nurseId|Hamshira|Медсестра
+ogImageFileId|Ulashish uchun rasm|Изображение для предпросмотра
+onAttendanceCorrection|Davomat tuzatilgandagi amal|Действие при исправлении посещаемости
+order|Tartib|Порядок
+overdueOnly|Faqat muddati o‘tganlar|Только просроченные
+page|Sahifa|Страница
+paidAt|To‘lov vaqti|Дата оплаты
+passportNumber|Pasport raqami|Номер паспорта
+password|Parol|Пароль
+payerGuardianId|To‘lovchi ota-ona|Родитель-плательщик
+paymentDueDay|To‘lovning oxirgi kuni|День срока оплаты
+periodId|Hisob davri|Расчётный период
+permission|Ruxsat|Разрешение
+permissionType|Ruxsat turi|Тип разрешения
+permissions|Ruxsatlar|Разрешения
+phone|Telefon|Телефон
+phoneAlt|Qo‘shimcha telefon|Дополнительный телефон
+phones|Telefonlar|Телефоны
+photoFileId|Surat|Фото
+pickupPermissionId|Olib ketish ruxsati|Разрешение на выдачу
+pickupPersonId|Bolani olib ketuvchi|Доверенное лицо
+position|Lavozim|Должность
+preferredLanguage|Afzal til|Предпочитаемый язык
+prescribedBy|Tavsiya qilgan shifokor|Назначивший врач
+priority|Ustuvorlik|Приоритет
+proration|Davrga mutanosib hisob|Пропорциональный расчёт
+provider|Ta’minotchi|Поставщик
+publishAt|Nashr qilish vaqti|Дата публикации
+q|Qidiruv|Поиск
+reaction|Reaksiya|Реакция
+reason|Sabab|Причина
+recalculation|Qayta hisoblash|Перерасчёт
+receiptNo|Kvitansiya raqami|Номер квитанции
+receiptNumberFormat|Kvitansiya raqami formati|Формат номера квитанции
+recipientId|Qabul qiluvchi|Получатель
+recipients|Qabul qiluvchilar|Получатели
+recordedBy|Qayd etgan xodim|Записавший сотрудник
+registrationNumber|Ro‘yxatga olish raqami|Регистрационный номер
+relationship|Qarindoshlik|Родство
+roleId|Rol|Роль
+roles|Rollar|Роли
+rounding|Yaxlitlash|Округление
+ru|Ruscha|Русский
+rules|Qoidalar|Правила
+sampleData|Namuna ma’lumotlar|Пример данных
+schedule|Jadval|Расписание
+scope|Qo‘llanish doirasi|Область действия
+severity|Og‘irlik darajasi|Степень тяжести
+sign|Tuzatish yo‘nalishi|Направление корректировки
+skipInvalid|Xato yozuvlarni o‘tkazib yuborish|Пропустить ошибочные записи
+sort|Saralash|Сортировка
+status|Holat|Статус
+tariffId|Tarif|Тариф
+taxInfo|Soliq ma’lumotlari|Налоговые данные
+templateKey|Andoza|Шаблон
+timezone|Vaqt mintaqasi|Часовой пояс
+title|Sarlavha|Заголовок
+to|Tugash sanasi|Дата окончания
+toGroupId|Yangi guruh|Новая группа
+type|Tur|Тип
+unit|Birlik|Единица
+unpaidOnly|Faqat to‘lanmaganlar|Только неоплаченные
+userId|Xodim|Сотрудник
+username|Kirish nomi|Имя пользователя
+uz|O‘zbekcha|Узбекский
+validFrom|Amal qilish boshlanishi|Действует с
+validTo|Amal qilish tugashi|Действует до
+validUntil|Amal qilish muddati|Действует до
+value|Qiymat|Значение
+variables|O‘zgaruvchilar|Переменные
+version|Versiya|Версия
+withdrawalMidMonth|Oy o‘rtasida ketish|Выбытие в середине месяца
+workingDays|Ish kunlari|Рабочие дни
+workingHours|Ish vaqti|Рабочие часы
+workplace|Ish joyi|Место работы
+year|Yil|Год
+pickupGuardianId|Bolani olib ketgan ota-ona|Родитель, забравший ребёнка

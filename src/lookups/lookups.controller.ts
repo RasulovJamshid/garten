@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { todayInTashkent } from '../common/tashkent-date';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
+import { AppErrors } from '../common/exceptions/app.exception';
 import { ChildLookupDto } from './child-lookup.dto';
 
 @ApiTags('lookups')
@@ -60,6 +61,23 @@ export class LookupsController {
       data,
       meta: { page: dto.page, limit: dto.limit, total, pages: Math.ceil(total / dto.limit) },
     };
+  }
+
+  @Get('children/:id/pickup-guardians')
+  @ApiOperation({ summary: 'Linked guardians for pickup within the selected permission scope' })
+  async pickupGuardians(@Param('id', ParseUUIDPipe) id: string, @Query() dto: ChildLookupDto) {
+    if (!['pickup:read', 'pickup:manage', 'pickup:temporary'].includes(dto.permission))
+      throw AppErrors.forbidden();
+    await this.prisma.assertChild(id, dto.permission);
+    const links = await this.prisma.db.childGuardian.findMany({
+      where: { childId: id, guardian: { deletedAt: null } },
+      select: {
+        relationship: true,
+        guardian: { select: { id: true, fullName: true, phone: true } },
+      },
+      orderBy: { guardian: { fullName: 'asc' } },
+    });
+    return links.map((link) => ({ ...link.guardian, relationship: link.relationship }));
   }
 
   @Get('children/:id/payers')

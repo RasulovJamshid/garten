@@ -57,7 +57,8 @@ export class PickupPermissionsController {
     @Query('childId') childId: string,
     @Query('pickupPersonId') pickupPersonId?: string,
     @Query('pickupPermissionId') pickupPermissionId?: string,
+    @Query('guardianId') guardianId?: string,
   ) {
-    return this.pickup.verify(childId, pickupPersonId, pickupPermissionId);
+    return this.pickup.verify(childId, pickupPersonId, pickupPermissionId, guardianId);
   }
 }

@@ -140,6 +140,8 @@ model AttendanceDay {
   checkOutBy           String?                @map("check_out_by") @db.Uuid
   checkOutNote         String?                @map("check_out_note")
   pickupPersonId       String?                @map("pickup_person_id") @db.Uuid
+  pickupGuardianId     String?                @map("pickup_guardian_id") @db.Uuid
+  pickupGuardian       Guardian?              @relation(fields: [pickupGuardianId], references: [id], onUpdate: NoAction, onDelete: NoAction, map: "fk_att_pickup_guardian")
   pickupPermissionId   String?                @map("pickup_permission_id") @db.Uuid
   billable             Boolean                @default(true)
   createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -615,6 +617,7 @@ model GroupStaff {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Guardian {
+  attendancePickups AttendanceDay[]
   id                                                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId                                              String              @map("tenant_id") @db.Uuid
   fullName                                              String              @map("full_name")

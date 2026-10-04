@@ -1,0 +1,162 @@
+﻿yes|Ha|Да
+no|Yo‘q|Нет
+string|Matn|Текст
+boolean|Ha yoki yo‘q|Да или нет
+object|Maydonlar guruhi|Группа полей
+array|Ro‘yxat|Список
+bytes|bayt|байт
+additionalFields|Qo‘shimcha maydonlar|Дополнительные поля
+additionalInfo|Qo‘shimcha ma’lumot|Дополнительные сведения
+availableActions|ta amal|действий
+featureHint|Bo‘limni tanlang|Выберите раздел
+browseFeatures|Bo‘limni tanlang yoki amalni qidiring|Выберите раздел или найдите действие
+readAction|Ko‘rish|Просмотр
+writeAction|O‘zgartirish|Изменение
+requiredField|Majburiy maydon|Обязательное поле
+removeField|Maydonni olib tashlash|Убрать поле
+workspaceSubtitle|Bugungi ishlaringizni qulay boshqaring|Удобно управляйте делами на сегодня
+modules|Bo‘limlar|Разделы
+preferences|Sozlamalar|Настройки
+actionOne|ta amal|действие
+actionFew|ta amal|действия
+actionMany|ta amal|действий
+recordOne|ta yozuv|запись
+recordFew|ta yozuv|записи
+recordMany|ta yozuv|записей
+currentRoles|Amaldagi rollar|Текущие роли
+noAssignedRoles|Rol biriktirilmagan|Роли не назначены
+roleInfoUnavailable|Rol ma’lumotlari mavjud emas|Сведения о ролях недоступны
+record|Yozuv|Запись
+searchByName|Ism yoki nom bo‘yicha qidirish|Поиск по имени или названию
+clearSearch|Qidiruvni tozalash|Очистить поиск
+loadMore|Yana ko‘rsatish|Показать ещё
+tapToChoose|Tanlash uchun bosing|Нажмите, чтобы выбрать
+selectedRecord|Tanlangan yozuv|Выбранная запись
+chooseRecordRequired|Ro‘yxatdan tanlang|Выберите из списка
+chooseChildFirst|Avval bolani tanlang|Сначала выберите ребёнка
+selectionUnavailable|Ushbu amalni tegishli yozuv yoki fayldan oching|Откройте это действие из нужной записи или файла
+groupsHint|Guruhni toping, so‘ng bolalar yoki xodimlarni boshqaring|Найдите группу, затем управляйте детьми или сотрудниками
+chooseGroup|Guruhni tanlash|Выбрать группу
+chooseChild|Bolani tanlash|Выбрать ребёнка
+groupStaffHint|Guruhni tanlang va har bir lavozim uchun xodimni ismi bo‘yicha toping|Выберите группу и найдите сотрудника по имени для каждой должности
+saveGroupStaff|Xodimlarni saqlash|Сохранить сотрудников
+notAssigned|Biriktirilmagan|Не назначен
+removeAssignment|Biriktirishni olib tashlash|Снять назначение
+staffSelectionUnavailable|Xodimlarni tanlash uchun xodimlar ro‘yxatiga kirish ruxsati kerak|Для выбора сотрудников нужен доступ к списку сотрудников
+assignToGroup|Bolani guruhga qo‘shish|Добавить ребёнка в группу
+groupChildrenHint|Guruhdagi bolalar. Yangi bolani ismi bo‘yicha tanlab qo‘shing|Дети этой группы. Чтобы добавить ребёнка, выберите его по имени
+saving|Saqlanmoqda…|Сохранение…
+peopleWork|Bolalar va oilalar|Дети и семьи
+teamWork|Xodimlar va kirish huquqlari|Команда и доступ
+moneyWork|To‘lovlar va hisob-kitoblar|Платежи и расчёты
+dailyWork|Kundalik ishlar|Ежедневная работа
+communicationWork|Xabarlar va e’lonlar|Сообщения и объявления
+insightsWork|Hisobotlar va nazorat|Отчёты и контроль
+organizationWork|Tashkilot va sozlamalar|Организация и настройки
+workflowDirectoryHint|Bo‘limni oching yoki bajarmoqchi bo‘lgan ishni qidiring|Откройте раздел или найдите нужное действие
+findTask|Bo‘lim yoki amalni qidirish|Найти раздел или действие
+sectionTasks|Boshqa vazifalar|Другие задачи
+applyFilters|Ko‘rsatish|Показать
+resetFilters|Filtrlarni tozalash|Сбросить фильтры
+recentRecordsHint|Bu yerda ushbu seansda ochilgan yoki yaratilgan fayllar va topshiriqlar ko‘rinadi|Здесь появятся файлы и задания, открытые или созданные в этом сеансе
+emptyWorkflowHint|Yozuvlar topilmadi. Filtrlarni o‘zgartiring yoki yangi yozuv qo‘shing|Записи не найдены. Измените фильтры или добавьте новую запись
+recordOverview|Ma’lumotlar|Сведения
+sensitiveActions|Muhim o‘zgartirishlar|Важные изменения
+chooseTaskContext|Avval yozuvni tanlang|Сначала выберите запись
+chooseTaskContextHint|Ism yoki nom bo‘yicha toping. Keyingi qadamda ma’lumotlarni ko‘rasiz yoki o‘zgartirasiz|Найдите по имени или названию. На следующем шаге можно просмотреть или изменить данные
+continueTask|Davom etish|Продолжить
+doneTask|Tayyor, qaytish|Готово, вернуться
+refreshData|Yangilash|Обновить
+showResults|Ko‘rsatish|Показать
+selectedTaskRecord|Tanlangan yozuv uchun|Для выбранной записи
+workflowHint_children|Bolani toping: ma’lumotlari, oilasi, hujjatlari va to‘lovlari|Найдите ребёнка: профиль, семья, документы и платежи
+workflowHint_guardians|Ota-onalar, aloqa ma’lumotlari va ularning bolalari|Родители, контакты и их дети
+workflowHint_groups|Guruhlar, bolalar va xodimlarni boshqarish|Группы, дети и назначения сотрудников
+workflowHint_users|Xodimni toping, ma’lumotlarini va kirish huquqlarini boshqaring|Найдите сотрудника, измените профиль или доступ
+workflowHint_roles|Rollarni tanlang va ularning ruxsatlarini boshqaring|Выберите роль и настройте её разрешения
+workflowHint_permissions|Har bir ruxsat nimaga imkon berishini ko‘ring|Посмотрите, что позволяет каждое разрешение
+workflowHint_attendance|Davomat, kelish-ketish va tuzatishlar|Посещаемость, приход, уход и исправления
+workflowHint_pickup|Bolani kim olib ketishi mumkinligini boshqaring|Настройте, кто может забирать ребёнка
+workflowHint_holidays|Bayram va dam olish kunlarini belgilang|Укажите праздники и выходные дни
+workflowHint_payments|To‘lovlarni toping, qabul qiling va kvitansiyani oching|Найдите или примите платёж, откройте квитанцию
+workflowHint_charges|Hisoblangan summalar va tuzatishlarni boshqaring|Просмотрите начисления и внесите корректировки
+workflowHint_debts|Qarzdorlikni ko‘ring va bolaning hisobini oching|Посмотрите задолженность и откройте счёт ребёнка
+workflowHint_expenses|Xarajatlarni kiriting va to‘langanini belgilang|Добавьте расход и отметьте оплату
+workflowHint_tariffs|Tariflarni yarating va bolalarga biriktiring|Создайте тариф и назначьте его ребёнку
+workflowHint_discounts|Bolani tanlang va chegirmalarini boshqaring|Выберите ребёнка и настройте скидки
+workflowHint_periods|Hisob-kitob oylarini oching yoki yoping|Откройте или закройте расчётный месяц
+workflowHint_billing-rules|Hisoblash qoidalari va ularning ta’sirini tekshiring|Настройте правила расчёта и проверьте их результат
+workflowHint_billing-runs|Oylik hisob-kitobni tekshiring, so‘ng tasdiqlang|Проверьте расчёт за месяц, затем подтвердите его
+workflowHint_announcements|E’lon yarating, auditoriyani tanlang va chop eting|Создайте объявление, выберите аудиторию и опубликуйте
+workflowHint_notifications|Xabar yuboring va yetkazilganini tekshiring|Отправьте сообщение и проверьте доставку
+workflowHint_notification-templates|Xabar matnlarini ikki tilda tahrirlang va tekshiring|Редактируйте и проверяйте тексты сообщений на двух языках
+workflowHint_telegram|Ota-onalarga Telegram ulashishga yordam bering|Помогите родителям подключить Telegram
+workflowHint_reports|Kerakli hisobotni tanlang va davrni belgilang|Выберите отчёт и укажите период
+workflowHint_dashboard|Sizning vazifangiz uchun asosiy ko‘rsatkichlar|Основные показатели для вашей работы
+workflowHint_exports|Tayyorlanayotgan hisobotlarni tekshiring va yuklab oling|Проверьте готовность отчётов и скачайте их
+workflowHint_audit|Kim, qachon va nimani o‘zgartirganini ko‘ring|Посмотрите, кто, когда и что изменил
+workflowHint_branches|Filiallar va ularning ma’lumotlarini boshqaring|Управляйте филиалами и их сведениями
+workflowHint_settings|Tashkilot sozlamalarini ko‘ring va o‘zgartiring|Просмотрите и измените настройки организации
+workflowHint_landing|Sayt mazmunini yangilang, tekshiring va nashr qiling|Обновите содержимое сайта, проверьте и опубликуйте
+workflowHint_files|Fayl yuklang yoki ushbu seansdagi faylni oching|Загрузите файл или откройте файл из текущего сеанса
+workflowHint_imports|Namuna oling, faylni tekshiring, so‘ng importni tasdiqlang|Скачайте шаблон, проверьте файл, затем подтвердите импорт
+workflowHint_lookups|Bolani ismi bo‘yicha toping va to‘lovchilarini ko‘ring|Найдите ребёнка по имени и посмотрите плательщиков
+workflowHint_auth|Hisobingiz parolini yangilang|Обновите пароль своей учётной записи
+searchPermission|Ruxsatni nomi bo‘yicha qidirish|Найти разрешение по названию
+choosePermissions|Ruxsatlarni tanlash|Выбрать разрешения
+applySelection|Tanlanganlarni qo‘llash|Применить выбор
+fixedThenPercent|Avval belgilangan summa, keyin foiz|Сначала фиксированная сумма, затем процент
+percentThenFixed|Avval foiz, keyin belgilangan summa|Сначала процент, затем фиксированная сумма
+subtitle|Qo‘shimcha sarlavha|Подзаголовок
+imageFileId|Rasm|Изображение
+ctaLabel|Tugma yozuvi|Текст кнопки
+ctaHref|Tugma havolasi|Ссылка кнопки
+images|Rasmlar|Изображения
+caption|Rasm izohi|Подпись к изображению
+people|Xodimlar|Сотрудники
+bio|Xodim haqida|О сотруднике
+plans|Takliflar|Предложения
+price|Narx matni|Текст цены
+highlighted|Ajratib ko‘rsatish|Выделить
+quote|Fikr matni|Текст отзыва
+author|Muallif|Автор
+question|Savol|Вопрос
+answer|Javob|Ответ
+phones|Telefon raqamlari|Телефоны
+workingHours|Ish vaqti|Время работы
+mapEmbedUrl|Xarita havolasi|Ссылка на карту
+social|Ijtimoiy tarmoqlar|Социальные сети
+platform|Tarmoq nomi|Название сети
+buttonLabel|Tugma yozuvi|Текст кнопки
+buttonHref|Tugma havolasi|Ссылка кнопки
+amount|Summa|Сумма
+receipt|Kvitansiya|Квитанция
+due|To‘lov muddati|Срок оплаты
+event|Tadbir|Событие
+message|Xabar|Сообщение
+icon|Belgi|Значок
+label|Yozuv|Подпись
+url|Havola|Ссылка
+reorderHint|Bo‘limlarni yuqoriga yoki pastga suring, so‘ng saqlang|Переместите разделы вверх или вниз, затем сохраните
+moveUp|Yuqoriga ko‘tarish|Переместить вверх
+moveDown|Pastga tushirish|Переместить вниз
+appearance|Ko‘rinish|Оформление
+theme_system|Telefon sozlamasiga mos|Как на телефоне
+theme_light|Yorug‘|Светлое
+theme_dark|Qorong‘i|Тёмное
+attendanceSearch|Bolaning ismi yoki familiyasi|Имя или фамилия ребёнка
+clearSearch|Qidiruvni tozalash|Очистить поиск
+arrivalQueue|Kelishi kutilmoqda|Ожидаем прихода
+departureQueue|Bog‘chada|В садике
+absences|Kelmaganlar|Отсутствуют
+attendanceHelp|Bola kelganda «Keldi» tugmasini bosing. Kelmasa, sababini belgilang.|Когда ребёнок придёт, нажмите «Пришёл». Если не придёт — укажите причину.
+pickupHelp|Bolani olib ketayotgan shaxsni tekshirish uchun «Olib ketish» tugmasini bosing.|Нажмите «Выдать ребёнка», чтобы проверить, кто забирает ребёнка.
+attendanceNoMatch|Bola topilmadi. Ismni yoki tanlangan guruhni tekshiring.|Ребёнок не найден. Проверьте имя или выбранную группу.
+arrivalsComplete|Barcha bolalar belgilangan. Kelganlarni «Bog‘chada» bo‘limida ko‘ring.|Все дети отмечены. Пришедшие дети — в разделе «В садике».
+attendanceEmpty|Bu ro‘yxatda hozircha bolalar yo‘q.|В этом списке пока нет детей.
+markAbsence|Kelmaslik sababini belgilash|Указать причину отсутствия
+attendanceHistory|Davomat tarixi va tuzatishlar|История и исправления
+childGuardians|Bolaning ota-onalari|Родители ребёнка
+noLinkedGuardians|Bu bolaga ota-ona biriktirilmagan. Bola profilida ota-onasini biriktiring.|У ребёнка нет привязанных родителей. Добавьте их в профиле ребёнка.
+noAdditionalPickup|Boshqa olib ketuvchi shaxslar belgilanmagan. Ota-onani yuqoridagi ro‘yxatdan tanlang.|Других доверенных лиц нет. Выберите родителя из списка выше.
+pickupGuardiansUnavailable|Ota-onalar ro‘yxatini yuklab bo‘lmadi. Qayta urinib ko‘ring; server yangilanishi talab qilinishi mumkin.|Не удалось загрузить родителей. Повторите попытку; возможно, требуется обновление сервера.

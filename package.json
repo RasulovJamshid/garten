@@ -31,7 +31,13 @@
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh",
     "restore:drill": "bash scripts/restore-drill.sh",
-    "backup:check": "bash scripts/check-backup-freshness.sh"
+    "backup:check": "bash scripts/check-backup-freshness.sh",
+    "mobile:contract": "node scripts/generate-mobile-contract.cjs",
+    "mobile:contract:check": "node scripts/generate-mobile-contract.cjs --check",
+    "mobile:localization": "node mobile/tool/localization/generate.cjs",
+    "mobile:localization:check": "node mobile/tool/localization/generate.cjs --check",
+    "mobile:workflows": "node mobile/tool/generate-workflows.cjs",
+    "mobile:workflows:check": "node mobile/tool/generate-workflows.cjs --check"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1098.0",

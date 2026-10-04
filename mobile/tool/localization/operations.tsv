@@ -1,0 +1,131 @@
+﻿AuthController_changePassword|Parolni o‘zgartirish|Изменить пароль
+TelegramInviteController_invite|Telegram uchun taklif yaratish|Создать приглашение в Telegram
+TelegramInviteController_bindings|Telegramga ulangan ota-onalar|Родители, подключённые к Telegram
+TelegramInviteController_unbound|Telegramga ulanmagan ota-onalar|Родители без подключения к Telegram
+PermissionsController_groups|Ruxsatlar guruhlari|Группы разрешений
+RolesController_matrix|Rollar va ruxsatlar jadvali|Матрица ролей и разрешений
+RolesController_users|Rolga biriktirilgan xodimlar|Сотрудники с этой ролью
+RolesController_diff|Rollarni taqqoslash|Сравнить роли
+RolesController_clone|Rol nusxasini yaratish|Создать копию роли
+RolesController_replacePermissions|Rol ruxsatlarini almashtirish|Заменить разрешения роли
+RolesController_grantOne|Rolga ruxsat berish|Выдать разрешение роли
+RolesController_revokeOne|Rol ruxsatini bekor qilish|Отозвать разрешение роли
+UsersController_activate|Xodimni faollashtirish|Активировать сотрудника
+UsersController_deactivate|Xodimni faolsizlantirish|Деактивировать сотрудника
+UsersController_loginHistory|Kirishlar tarixi|История входов
+UsersController_roles|Xodim rollari|Роли сотрудника
+UsersController_assignRole|Xodimga rol biriktirish|Назначить роль сотруднику
+UsersController_replaceRoles|Xodim rollarini almashtirish|Заменить роли сотрудника
+UsersController_removeRole|Xodim rolini olib tashlash|Снять роль сотрудника
+UsersController_effectivePermissions|Xodimning amaldagi ruxsatlari|Действующие разрешения сотрудника
+UsersController_overrides|Xodimning maxsus ruxsatlari|Индивидуальные разрешения сотрудника
+UsersController_setOverride|Maxsus ruxsatni sozlash|Настроить индивидуальное разрешение
+UsersController_removeOverride|Maxsus ruxsatni olib tashlash|Удалить индивидуальное разрешение
+ChildrenController_setStatus|Bolaning holatini o‘zgartirish|Изменить статус ребёнка
+ChildrenController_history|Bolaning holatlari tarixi|История статусов ребёнка
+ChildrenController_listDocuments|Bolaning hujjatlari|Документы ребёнка
+ChildrenController_createDocument|Bolaga hujjat qo‘shish|Добавить документ ребёнка
+ChildrenController_updateDocument|Hujjat ma’lumotlarini tahrirlash|Изменить данные документа
+ChildrenController_verifyDocument|Hujjatni tasdiqlash|Подтвердить документ
+ChildrenController_getMedical|Bolaning tibbiy kartasi|Медицинская карта ребёнка
+ChildrenController_updateMedical|Tibbiy kartani yangilash|Обновить медицинскую карту
+ChildrenController_medicalAlerts|Tibbiy ogohlantirishlar|Медицинские предупреждения
+ChildrenController_listConsents|Ota-onaning roziliklari|Согласия родителей
+ChildrenController_recordConsent|Rozilikni qayd etish|Записать согласие
+ChildrenController_revokeConsent|Rozilikni bekor qilish|Отозвать согласие
+DocumentsController_expiring|Muddati tugayotgan hujjatlar|Документы с истекающим сроком
+LookupsController_children|Bolani tanlash|Выбрать ребёнка
+LookupsController_payers|To‘lovchini tanlash|Выбрать плательщика
+GuardiansController_children|Ota-onaning bolalari|Дети родителя
+ChildGuardianLinksController_list|Bolaning ota-onalari|Родители ребёнка
+ChildGuardianLinksController_link|Ota-onani bolaga biriktirish|Связать родителя с ребёнком
+ChildGuardianLinksController_update|Ota-ona aloqasini tahrirlash|Изменить связь с родителем
+ChildGuardianLinksController_unlink|Ota-ona aloqasini uzish|Удалить связь с родителем
+GroupsController_children|Guruhdagi bolalar|Дети группы
+GroupsController_assignChild|Bolani guruhga biriktirish|Зачислить ребёнка в группу
+GroupsController_transfer|Bolani boshqa guruhga o‘tkazish|Перевести ребёнка в другую группу
+GroupsController_staff|Guruh xodimlari|Сотрудники группы
+GroupsController_setStaff|Guruh xodimlarini biriktirish|Назначить сотрудников группы
+GroupsController_history|Guruhga biriktirish tarixi|История зачислений в группу
+AttendanceController_board|Bugungi davomat ro‘yxati|Список посещаемости на сегодня
+AttendanceController_today|Bugungi davomat|Посещаемость сегодня
+AttendanceController_inside|Hozir bog‘chada bo‘lgan bolalar|Дети в садике сейчас
+AttendanceController_absent|Kelmagan bolalar|Отсутствующие дети
+AttendanceController_notPickedUp|Olib ketilmagan bolalar|Дети, которых ещё не забрали
+AttendanceController_calendar|Bolaning davomat taqvimi|Календарь посещаемости ребёнка
+AttendanceController_summary|Davomat xulosasi|Сводка посещаемости
+AttendanceController_corrections|Davomat tuzatishlari|Исправления посещаемости
+AttendanceController_checkIn|Bolaning kelishini qayd etish|Отметить приход ребёнка
+AttendanceController_checkOut|Bolaning ketishini qayd etish|Отметить уход ребёнка
+AttendanceController_setStatus|Davomat holatini belgilash|Установить статус посещаемости
+AttendanceController_correct|Davomatni tuzatish|Исправить посещаемость
+NotificationsController_send|Xabarnoma yuborish|Отправить уведомление
+NotificationsController_retry|Xabarnomani qayta yuborish|Отправить уведомление повторно
+NotificationTemplatesController_upsert|Xabar andozasini saqlash|Сохранить шаблон уведомления
+NotificationTemplatesController_preview|Xabar andozasini ko‘rish|Просмотреть шаблон уведомления
+AnnouncementsController_publish|E’lonni nashr qilish|Опубликовать объявление
+BillingRulesController_create|Yangi hisoblash qoidalarini nashr qilish|Опубликовать новые правила начисления
+BillingRulesController_active|Amaldagi hisoblash qoidalari|Действующие правила начисления
+BillingRulesController_diff|Hisoblash qoidalarini taqqoslash|Сравнить правила начисления
+BillingRulesController_simulate|Bolaning hisobini oldindan ko‘rish|Предварительный расчёт для ребёнка
+BillingRunsController_preview|Hisoblashni oldindan ko‘rish|Предварительный расчёт начислений
+BillingRunsController_discard|Hisoblashni bekor qilish|Отменить расчёт
+BillingRunsController_explain|Bola hisobining tafsilotlari|Объяснение начисления ребёнку
+BillingRunsController_commit|Hisoblashni tasdiqlash|Подтвердить расчёт
+ChargesController_adjustment|Hisobga tuzatish kiritish|Внести корректировку начисления
+ChargesController_ledger|Hisoblar va tuzatishlar tarixi|История начислений и корректировок
+ChargesController_recalculate|Hisoblarni qayta hisoblash|Пересчитать начисления
+ChargesController_createManual|Qo‘lda hisob qo‘shish|Добавить начисление вручную
+ChargesController_reverse|Hisobni bekor qilish|Сторнировать начисление
+ChargesController_forChild|Bolaning hisoblari|Начисления ребёнка
+TariffsController_tariffsOfChild|Bolaning tariflari|Тарифы ребёнка
+TariffsController_assign|Bolaga tarif biriktirish|Назначить тариф ребёнку
+TariffsController_end|Tarif amalini tugatish|Завершить действие тарифа
+DiscountsController_revoke|Chegirmani bekor qilish|Отозвать скидку
+PeriodsController_close|Hisob davrini yopish|Закрыть расчётный период
+PeriodsController_reopen|Hisob davrini qayta ochish|Открыть расчётный период повторно
+PickupPersonsController_revoke|Bolani olib ketish huquqini bekor qilish|Отозвать право забирать ребёнка
+PickupPermissionsController_active|Amaldagi olib ketish ruxsatlari|Действующие разрешения на выдачу ребёнка
+PickupPermissionsController_createTemporary|Vaqtinchalik olib ketish ruxsatini berish|Выдать временное разрешение
+PickupPermissionsController_history|Bolani olib ketish tarixi|История выдачи ребёнка
+PickupPermissionsController_verify|Bolani olib ketuvchini tekshirish|Проверить доверенное лицо
+PaymentsController_cancel|To‘lovni bekor qilish|Отменить платёж
+PaymentsController_receipt|To‘lov kvitansiyasi|Квитанция об оплате
+DebtsController_summary|Qarzdorlik xulosasi|Сводка задолженностей
+DebtsController_forChild|Bolaning qarzdorligi|Задолженность ребёнка
+ExpensesController_summary|Yillik xarajatlar xulosasi|Сводка расходов за год
+ExpensesController_pay|Xarajatni to‘langan deb belgilash|Отметить расход как оплаченный
+FilesController_upload|Fayl yuklash|Загрузить файл
+FilesController_download|Faylni yuklab olish|Скачать файл
+FilesController_remove|Faylni o‘chirish|Удалить файл
+ReportsController_attendanceDaily|Kunlik davomat hisoboti|Отчёт о посещаемости за день
+ReportsController_attendanceMonthly|Oylik davomat hisoboti|Отчёт о посещаемости за месяц
+ReportsController_attendanceCorrections|Davomat tuzatishlari hisoboti|Отчёт об исправлениях посещаемости
+ReportsController_childrenActive|Faol bolalar hisoboti|Отчёт об активных детях
+ReportsController_childrenEnrollments|Qabul qilingan bolalar hisoboti|Отчёт о зачислениях
+ReportsController_childrenDocumentsExpiring|Muddati tugayotgan hujjatlar hisoboti|Отчёт о документах с истекающим сроком
+ReportsController_childrenMedicalAlerts|Tibbiy ogohlantirishlar hisoboti|Отчёт о медицинских предупреждениях
+ReportsController_financeCharges|Hisoblar hisoboti|Отчёт о начислениях
+ReportsController_financePayments|To‘lovlar hisoboti|Отчёт о платежах
+ReportsController_financeDebts|Qarzdorlik hisoboti|Отчёт о задолженностях
+ReportsController_financeDiscounts|Chegirmalar hisoboti|Отчёт о скидках
+ReportsController_financeCancellations|Bekor qilingan amallar hisoboti|Отчёт об отменах
+ReportsController_expensesMonthly|Oylik xarajatlar hisoboti|Отчёт о расходах за месяц
+DashboardController_director|Direktor paneli|Панель директора
+DashboardController_accountant|Buxgalter paneli|Панель бухгалтера
+DashboardController_reception|Qabulxona paneli|Панель приёмной
+ImportsController_template|Import andozasini yuklab olish|Скачать шаблон импорта
+ImportsController_validate|Import faylini tekshirish|Проверить файл импорта
+ImportsController_commit|Importni tasdiqlash|Подтвердить импорт
+LandingController_get|Sayt sahifasi loyihasi|Черновик страницы сайта
+LandingController_blockTypes|Sayt bloklari turlari|Типы блоков сайта
+LandingController_createBlock|Saytga blok qo‘shish|Добавить блок на сайт
+LandingController_reorder|Bloklar tartibini o‘zgartirish|Изменить порядок блоков
+LandingController_updateBlock|Sayt blokini tahrirlash|Изменить блок сайта
+LandingController_deleteBlock|Sayt blokini o‘chirish|Удалить блок сайта
+LandingController_updateSeo|Sayt qidiruvi va ulashish sozlamalari|Настроить поиск и предпросмотр сайта
+LandingController_publish|Sayt loyihasini nashr qilish|Опубликовать страницу сайта
+LandingController_versions|Saytning nashr qilingan versiyalari|Опубликованные версии сайта
+LandingController_version|Sayt versiyasini ko‘rish|Просмотреть версию сайта
+LandingController_restore|Avvalgi sayt versiyasini tiklash|Восстановить предыдущую версию сайта
+LookupsController_pickupGuardians|Bolaning ota-onalarini tanlash|Выбрать родителей ребёнка

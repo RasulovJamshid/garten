@@ -1,0 +1,26 @@
+﻿AuditController|Amallar tarixi|записей журнала|Amal|действия|запись журнала
+PermissionsController|Ruxsatlar|разрешений|Ruxsat|разрешения|разрешение
+RolesController|Rollar|ролей|Rol|роли|роль
+UsersController|Xodimlar|сотрудников|Xodim|сотрудника|сотрудника
+SettingsController|Sozlamalar|настроек|Sozlamalar|настроек|настройки
+HolidaysController|Dam olish kunlari|выходных дней|Dam olish kuni|выходного дня|выходной день
+BranchesController|Filiallar|филиалов|Filial|филиала|филиал
+ChildrenController|Bolalar|детей|Bola|ребёнка|ребёнка
+GuardiansController|Ota-onalar|родителей|Ota-ona|родителя|родителя
+GroupsController|Guruhlar|групп|Guruh|группы|группу
+AttendanceController|Davomat yozuvlari|записей посещаемости|Davomat yozuvi|посещаемости|запись посещаемости
+NotificationsController|Xabarnomalar|уведомлений|Xabarnoma|уведомления|уведомление
+NotificationTemplatesController|Xabar andozalari|шаблонов уведомлений|Xabar andozasi|шаблона|шаблон
+AnnouncementsController|E’lonlar|объявлений|E’lon|объявления|объявление
+BillingRulesController|Hisoblash qoidalari versiyalari|версий правил начисления|Qoidalar versiyasi|версии правил|версию правил
+BillingRunsController|Hisoblash jarayonlari|расчётов начислений|Hisoblash jarayoni|расчёта|расчёт
+ChargesController|Hisoblar|начислений|Hisob|начисления|начисление
+TariffsController|Tariflar|тарифов|Tarif|тарифа|тариф
+DiscountsController|Bolaning chegirmalari|скидок ребёнка|Chegirma|скидки|скидку
+PeriodsController|Hisob davrlari|расчётных периодов|Hisob davri|расчётного периода|расчётный период
+PickupPersonsController|Bolani olib ketuvchi shaxslar|доверенных лиц|Ishonchli shaxs|доверенного лица|доверенное лицо
+PaymentsController|To‘lovlar|платежей|To‘lov|платежа|платёж
+DebtsController|Qarzdorlik|задолженностей|Qarzdorlik|задолженности|задолженность
+ExpensesController|Xarajatlar|расходов|Xarajat|расхода|расход
+ExportsController|Eksportlar|экспортов|Eksport holati|экспорта|экспорт
+ImportsController|Importlar|импортов|Import holati|импорта|импорт

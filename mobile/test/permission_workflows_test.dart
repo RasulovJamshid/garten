@@ -51,7 +51,7 @@ void main() {
   );
 
   testWidgets(
-    'teachers see medical alerts without guardian or clinical profile controls',
+    'child readers see linked guardians and medical alerts without clinical editing',
     (tester) async {
       final paths = <String>[];
       final session = testSession(
@@ -83,7 +83,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.family_restroom), findsNothing);
+      expect(find.byIcon(Icons.family_restroom), findsOneWidget);
       expect(find.byIcon(Icons.health_and_safety_outlined), findsOneWidget);
       await tester.tap(find.byIcon(Icons.health_and_safety_outlined));
       await tester.pumpAndSettle();

@@ -5,6 +5,7 @@ import 'core/session.dart';
 import 'ui/common.dart';
 import 'ui/login.dart';
 import 'ui/shell.dart';
+import 'ui/theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,56 +34,9 @@ class AlishaxApp extends StatelessWidget {
         locale: Locale(session.language),
         supportedLocales: const [Locale('uz'), Locale('ru')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: navy,
-            primary: navy,
-            secondary: amber,
-            surface: Colors.white,
-          ),
-          scaffoldBackgroundColor: const Color(0xFFF7F7FB),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFFF7F7FB),
-            foregroundColor: navy,
-            centerTitle: false,
-            elevation: 0,
-          ),
-          cardTheme: CardThemeData(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE1E0EA)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE1E0EA)),
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(48, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
-          ),
-          navigationBarTheme: const NavigationBarThemeData(
-            backgroundColor: Colors.white,
-            indicatorColor: Color(0xFFFFE8A3),
-          ),
-        ),
+        theme: mobileTheme(),
+        darkTheme: mobileTheme(brightness: Brightness.dark),
+        themeMode: session.themeMode,
         home: session.loading
             ? const Scaffold(
                 body: Center(child: CircularProgressIndicator.adaptive()),

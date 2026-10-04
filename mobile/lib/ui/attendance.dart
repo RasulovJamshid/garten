@@ -23,8 +23,27 @@ class _AttendancePageState extends State<AttendancePage> {
   Object? error;
   String? groupId;
   String search = '', filter = 'total';
+  final searchController = TextEditingController();
+  bool refreshing = false;
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  bool matchesStatus(Json row, String value) =>
+      value == 'total' ||
+      (value == 'away'
+          ? [
+              'absent',
+              'sick',
+              'vacation',
+              'excused',
+            ].contains(attendanceStatus(row))
+          : attendanceStatus(row) == value);
   final pending = <String>{};
-  int generation = 0;
+  int generation = 0, revision = 0;
+  final updates = <String, (int, Json)>{};
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -33,6 +52,8 @@ class _AttendancePageState extends State<AttendancePage> {
 
   Future<void> load() async {
     final request = ++generation;
+    final startedRevision = revision;
+    setState(() => refreshing = true);
     try {
       final data = await AppScope.of(context).api.request(
         '/attendance/board',
@@ -40,13 +61,39 @@ class _AttendancePageState extends State<AttendancePage> {
       );
       if (mounted && request == generation) {
         setState(() {
-          rows = records(data);
+          rows = records(data).map((row) {
+            final update = updates[object(row['child'])['id']];
+            return update != null && update.$1 > startedRevision
+                ? <String, dynamic>{...row, 'attendance': update.$2}
+                : row;
+          }).toList();
+          updates.removeWhere((_, update) => update.$1 <= startedRevision);
           error = null;
         });
       }
     } catch (e) {
       if (mounted && request == generation) setState(() => error = e);
+    } finally {
+      if (mounted && request == generation) setState(() => refreshing = false);
     }
+  }
+
+  void updateAttendance(String childId, dynamic response) {
+    if (!mounted) return;
+    final attendance = object(response);
+    if (attendance['childId'] != childId) {
+      throw const ApiFailure('INVALID_RESPONSE');
+    }
+    updates[childId] = (++revision, attendance);
+    setState(() {
+      rows = rows
+          ?.map(
+            (row) => object(row['child'])['id'] == childId
+                ? <String, dynamic>{...row, 'attendance': attendance}
+                : row,
+          )
+          .toList();
+    });
   }
 
   Future<void> checkIn(Json row) async {
@@ -54,12 +101,12 @@ class _AttendancePageState extends State<AttendancePage> {
     if (pending.contains(id)) return;
     setState(() => pending.add(id));
     try {
-      await AppScope.of(context).api.request(
+      final updated = await AppScope.of(context).api.request(
         '/attendance/check-in',
         method: 'POST',
         data: {'childId': id},
       );
-      await load();
+      updateAttendance(id, updated);
     } catch (e) {
       if (mounted) toast(context, errorText(context, e));
     } finally {
@@ -72,18 +119,18 @@ class _AttendancePageState extends State<AttendancePage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => const AbsenceForm(),
+      builder: (_) => AbsenceForm(childName: childName(object(row['child']))),
     );
     if (result == null || !mounted) return;
     final id = object(row['child'])['id'].toString();
     setState(() => pending.add(id));
     try {
-      await AppScope.of(context).api.request(
+      final updated = await AppScope.of(context).api.request(
         '/attendance/status',
         method: 'POST',
         data: {'childId': id, 'date': today(), ...result},
       );
-      await load();
+      updateAttendance(id, updated);
     } catch (e) {
       if (mounted) toast(context, errorText(context, e));
     } finally {
@@ -107,7 +154,7 @@ class _AttendancePageState extends State<AttendancePage> {
               childName(
                 object(r['child']),
               ).toLowerCase().contains(search.toLowerCase()) &&
-              (filter == 'total' || attendanceStatus(r) == filter),
+              matchesStatus(r, filter),
         )
         .toList();
     return RefreshIndicator(
@@ -121,14 +168,6 @@ class _AttendancePageState extends State<AttendancePage> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          TextField(
-            onChanged: (v) => setState(() => search = v),
-            decoration: InputDecoration(
-              hintText: tr(context, 'search'),
-              prefixIcon: const Icon(Icons.search),
-            ),
-          ),
-          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: groupId ?? '',
             isExpanded: true,
@@ -148,20 +187,47 @@ class _AttendancePageState extends State<AttendancePage> {
             onChanged: (v) {
               setState(() {
                 groupId = v == '' ? null : v;
+                rows = [];
+                error = null;
               });
               load();
             },
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: searchController,
+            onChanged: (v) => setState(() => search = v.trim()),
+            decoration: InputDecoration(
+              hintText: tr(context, 'attendanceSearch'),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: search.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: tr(context, 'clearSearch'),
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        searchController.clear();
+                        setState(() => search = '');
+                      },
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 4,
-            children: ['total', 'pending', 'inside', 'left']
+            children: ['total', 'pending', 'inside', 'away', 'left']
                 .map(
                   (s) => FilterChip(
                     selected: filter == s,
                     label: Text(
-                      '${tr(context, s)} · ${s == 'total' ? rows!.length : rows!.where((r) => attendanceStatus(r) == s).length}',
+                      '${tr(context, s == 'pending'
+                          ? 'arrivalQueue'
+                          : s == 'inside'
+                          ? 'departureQueue'
+                          : s == 'away'
+                          ? 'absences'
+                          : s)} · ${s == 'total' ? rows!.length : rows!.where((r) => matchesStatus(r, s)).length}',
                     ),
                     onSelected: (_) => setState(() => filter = s),
                   ),
@@ -169,13 +235,36 @@ class _AttendancePageState extends State<AttendancePage> {
                 .toList(),
           ),
           const SizedBox(height: 16),
-          if (visible.isEmpty) const EmptyView(),
+          if (refreshing) const LinearProgressIndicator(),
+          if (!refreshing) ...[
+            Text(
+              tr(context, filter == 'inside' ? 'pickupHelp' : 'attendanceHelp'),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (visible.isEmpty && !refreshing)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  tr(
+                    context,
+                    search.isNotEmpty
+                        ? 'attendanceNoMatch'
+                        : filter == 'pending'
+                        ? 'arrivalsComplete'
+                        : 'attendanceEmpty',
+                  ),
+                ),
+              ),
+            ),
           ...visible.map((row) {
             final child = object(row['child']);
             final name = childName(child);
             final status = attendanceStatus(row);
-            final busy = pending.contains(child['id']);
+            final busy = refreshing || pending.contains(child['id'].toString());
             return Card(
+              key: ValueKey<String>(child['id'].toString()),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -188,16 +277,20 @@ class _AttendancePageState extends State<AttendancePage> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 6),
+                              StatusPill(status),
+                              if (object(child['group'])['name'] != null)
+                                Text(object(child['group'])['name'].toString()),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        StatusPill(status),
                       ],
                     ),
                     if ((session.can('attendance:checkin') &&
@@ -213,14 +306,19 @@ class _AttendancePageState extends State<AttendancePage> {
                               ? null
                               : () async {
                                   if (status == 'inside') {
-                                    final done = await Navigator.push<bool>(
+                                    final done = await Navigator.push<Json>(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) =>
                                             PickupPage(child: child),
                                       ),
                                     );
-                                    if (done == true && mounted) await load();
+                                    if (done != null && mounted) {
+                                      updateAttendance(
+                                        child['id'].toString(),
+                                        done,
+                                      );
+                                    }
                                   } else {
                                     await checkIn(row);
                                   }
@@ -246,7 +344,7 @@ class _AttendancePageState extends State<AttendancePage> {
                         !['inside', 'left'].contains(status))
                       TextButton(
                         onPressed: busy ? null : () => markAbsence(row),
-                        child: Text(tr(context, 'absent')),
+                        child: Text(tr(context, 'markAbsence')),
                       ),
                   ],
                 ),
@@ -268,6 +366,8 @@ class PickupPage extends StatefulWidget {
 
 class _PickupPageState extends State<PickupPage> {
   List<Json>? permissions;
+  List<Json> guardians = [];
+  Object? guardianError;
   Object? error;
   bool busy = false;
   @override
@@ -279,7 +379,19 @@ class _PickupPageState extends State<PickupPage> {
   Future<void> load() async {
     busy = true;
     try {
-      final data = await AppScope.of(context).api.request(
+      final api = AppScope.of(context).api;
+      try {
+        guardians = records(
+          await api.request(
+            '/lookups/children/${widget.child['id']}/pickup-guardians',
+            query: {'permission': 'pickup:read'},
+          ),
+        );
+        guardianError = null;
+      } catch (e) {
+        guardianError = e;
+      }
+      final data = await api.request(
         '/pickup-permissions/active',
         query: {'childId': widget.child['id']},
       );
@@ -296,13 +408,17 @@ class _PickupPageState extends State<PickupPage> {
     }
   }
 
-  Future<void> release(Json permission) async {
+  Future<void> release(Json permission, {bool guardian = false}) async {
+    if (busy) return;
     setState(() => busy = true);
     try {
       final api = AppScope.of(context).api;
       final payload = {
         'childId': widget.child['id'],
-        'pickupPermissionId': permission['id'],
+        if (guardian)
+          'guardianId': permission['id']
+        else
+          'pickupPermissionId': permission['id'],
       };
       final verdict = object(
         await api.request('/pickup/verify', query: payload),
@@ -324,8 +440,14 @@ class _PickupPageState extends State<PickupPage> {
       )) {
         return;
       }
-      await api.request('/attendance/check-out', method: 'POST', data: payload);
-      if (mounted) Navigator.pop(context, true);
+      final updated = object(
+        await api.request(
+          '/attendance/check-out',
+          method: 'POST',
+          data: payload,
+        ),
+      );
+      if (mounted) Navigator.pop(context, updated);
     } catch (e) {
       if (mounted) toast(context, errorText(context, e));
     } finally {
@@ -347,8 +469,59 @@ class _PickupPageState extends State<PickupPage> {
                 childName(widget.child),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+              SectionTitle(tr(context, 'childGuardians')),
+              if (guardianError != null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Text(tr(context, 'pickupGuardiansUnavailable')),
+                        TextButton(
+                          onPressed: busy ? null : load,
+                          child: Text(tr(context, 'retry')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (guardians.isEmpty && guardianError == null)
+                Text(tr(context, 'noLinkedGuardians')),
+              ...guardians.map(
+                (g) => Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.family_restroom),
+                          title: Text(g['fullName'].toString()),
+                          subtitle: Text(
+                            [
+                              tr(
+                                context,
+                                g['relationship']?.toString() ?? 'guardian',
+                              ),
+                              g['phone'],
+                            ].whereType<String>().join(' · '),
+                          ),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: busy
+                              ? null
+                              : () => release(g, guardian: true),
+                          child: Text(tr(context, 'verify')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               SectionTitle(tr(context, 'pickupPerson')),
-              if (permissions!.isEmpty) const EmptyView(),
+              if (permissions!.isEmpty) Text(tr(context, 'noAdditionalPickup')),
+
               ...permissions!.map((p) {
                 final person = object(p['pickupPerson']);
                 final name = (person['fullName'] ?? p['adhocFullName'] ?? '—')

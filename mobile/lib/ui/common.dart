@@ -5,9 +5,9 @@ import '../core/api.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 
-const navy = Color(0xFF211964);
+const navy = Color(0xFF3C57B8);
 const amber = Color(0xFFFAB504);
-const green = Color(0xFF24745C);
+const green = Color(0xFF128477);
 
 class PrivateAvatar extends StatefulWidget {
   const PrivateAvatar({
@@ -113,7 +113,11 @@ class FailureView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 44, color: navy),
+          Icon(
+            Icons.cloud_off_rounded,
+            size: 44,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: 16),
           Text(errorText(context, error), textAlign: TextAlign.center),
           const SizedBox(height: 16),
@@ -134,7 +138,11 @@ class EmptyView extends StatelessWidget {
     padding: const EdgeInsets.all(40),
     child: Column(
       children: [
-        const Icon(Icons.inbox_outlined, size: 48, color: navy),
+        Icon(
+          Icons.inbox_outlined,
+          size: 48,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         const SizedBox(height: 16),
         Text(tr(context, 'empty')),
       ],
@@ -156,15 +164,15 @@ class StatusPill extends StatelessWidget {
     ].contains(status);
     final bad = ['cancelled', 'failed', 'sick', 'suspended'].contains(status);
     final color = good
-        ? green
+        ? Theme.of(context).colorScheme.secondary
         : bad
-        ? const Color(0xFFB63D4E)
-        : navy;
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(9),
+        color: color.withValues(alpha: .09),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         tr(context, status),
@@ -184,10 +192,13 @@ class PersonAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => CircleAvatar(
     radius: 24,
-    backgroundColor: const Color(0xFFECE9F6),
+    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
     child: Text(
       name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-      style: const TextStyle(color: navy, fontWeight: FontWeight.w700),
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onPrimaryContainer,
+        fontWeight: FontWeight.w700,
+      ),
     ),
   );
 }
@@ -197,7 +208,7 @@ Future<bool> confirm(BuildContext context, String title, String body) async =>
       context: context,
       builder: (ctx) => AlertDialog.adaptive(
         title: Text(title),
-        content: Text(body),
+        content: SingleChildScrollView(child: Text(body)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

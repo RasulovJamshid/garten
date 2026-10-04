@@ -1,11 +1,76 @@
 import 'package:flutter/widgets.dart';
 import 'session.dart';
+import 'feature_labels.dart';
 
 String tr(BuildContext context, String key) =>
     translate(AppScope.of(context).language, key);
 String translate(String language, String key) =>
     labels[key]?[language == 'ru' ? 1 : 0] ?? key;
+String countText(BuildContext context, String unit, int count) {
+  final language = AppScope.of(context).language;
+  final last = count % 10, lastTwo = count % 100;
+  final suffix = language != 'ru' || (lastTwo >= 11 && lastTwo <= 14)
+      ? 'Many'
+      : last == 1
+      ? 'One'
+      : last >= 2 && last <= 4
+      ? 'Few'
+      : 'Many';
+  return '$count ${translate(language, '$unit$suffix')}';
+}
+
 const labels = <String, List<String>>{
+  'checkExport': ['Eksportni tekshirish', 'Проверить экспорт'],
+  'items': ['ta yozuv', 'записей'],
+  'fields': ['ta maydon', 'полей'],
+  'selectRecord': ['Tanlash', 'Выбрать запись'],
+  'clearValue': ['Qiymatni tozalash', 'Очистить значение'],
+  'number': ['Raqam', 'Номер'],
+  'allFeatures': ['Bo‘limlar', 'Разделы'],
+  'recordActions': ['Amallar', 'Действия'],
+  'filters': ['Filtrlar', 'Фильтры'],
+  'addField': ['Maydon qo‘shish', 'Добавить поле'],
+  'chooseFile': ['Fayl tanlash', 'Выбрать файл'],
+  'share': ['Ulashish / saqlash', 'Поделиться / сохранить'],
+  'download': ['Yuklab olish', 'Скачать'],
+  'load': ['Ko‘rsatish', 'Показать'],
+  'result': ['Natija', 'Результат'],
+  'invalid': ['Qiymatni tekshiring', 'Проверьте значение'],
+  'confirmChanges': [
+    'O‘zgarishlarni qo‘llashni tasdiqlang.',
+    'Подтвердите применение изменений.',
+  ],
+  'retrySameOperation': [
+    'Oldingi so‘rov natijasi tasdiqlanmagan. Qayta urinish aynan shu so‘rovni yuboradi.',
+    'Результат предыдущего запроса не подтверждён. Повтор отправит тот же запрос.',
+  ],
+  'string': ['Matn', 'Текст'],
+  'boolean': ['Ha / yo‘q', 'Да / нет'],
+  'object': ['Maydonlar', 'Поля'],
+  'array': ['Ro‘yxat', 'Список'],
+  'billing-rules': ['Hisoblash qoidalari', 'Правила начисления'],
+  'billing-runs': ['Hisoblash jarayonlari', 'Расчёты начислений'],
+  'tariffs': ['Tariflar', 'Тарифы'],
+  'discounts': ['Chegirmalar', 'Скидки'],
+  'periods': ['Hisob davrlari', 'Расчётные периоды'],
+  'pickup': ['Bolani olib ketish', 'Выдача детей'],
+  'notification-templates': ['Xabar andozalari', 'Шаблоны уведомлений'],
+  'users': ['Xodimlar', 'Сотрудники'],
+  'settings': ['Sozlamalar', 'Настройки'],
+  'holidays': ['Dam olish kunlari', 'Выходные дни'],
+  'branches': ['Filiallar', 'Филиалы'],
+  'files': ['Fayllar', 'Файлы'],
+  'reports': ['Hisobotlar', 'Отчёты'],
+  'exports': ['Eksportlar', 'Экспорт'],
+  'dashboard': ['Umumiy ko‘rsatkichlar', 'Сводные показатели'],
+  'imports': ['Import', 'Импорт'],
+  'landing': ['Veb-sayt', 'Веб-сайт'],
+  'permissions': ['Ruxsatlar', 'Разрешения'],
+  'auth': ['Hisob', 'Аккаунт'],
+  'lookups': ['Qidirish', 'Поиск'],
+  'telegram': ['Telegram', 'Telegram'],
+  'add': ['Qo‘shish', 'Добавить'],
+
   'PROFILE_LOAD_FAILED': [
     'Login va parol qabul qilindi, lekin hisob ma’lumotlarini yuklab bo‘lmadi. Qayta urining.',
     'Логин и пароль приняты, но не удалось загрузить профиль. Повторите попытку.',
@@ -62,7 +127,6 @@ const labels = <String, List<String>>{
   'action': ['Amal', 'Действие'],
   'entityType': ['Obyekt turi', 'Тип объекта'],
   'type': ['Turi', 'Тип'],
-  'number': ['Raqam', 'Номер'],
   'expiresAt': ['Amal qilish muddati', 'Срок действия'],
   'sign': ['Yo‘nalish', 'Направление'],
   'chronicConditions': ['Surunkali kasalliklar', 'Хронические заболевания'],
@@ -223,10 +287,6 @@ const labels = <String, List<String>>{
   ],
   'reset': ['Parolni tiklash', 'Восстановить пароль'],
   'token': ['Tiklash kodi', 'Код восстановления'],
-  'newPassword': [
-    'Yangi parol (kamida 12 belgi)',
-    'Новый пароль (от 12 символов)',
-  ],
   'updated': ['Yangilandi', 'Обновлено'],
   'total': ['Jami', 'Всего'],
   'paid': ['To‘langan', 'Оплачен'],
@@ -238,4 +298,5 @@ const labels = <String, List<String>>{
   'sent': ['Yuborilgan', 'Отправлено'],
   'failed': ['Xato', 'Ошибка'],
   'queued': ['Navbatda', 'В очереди'],
+  ...featureLabels,
 };

@@ -291,7 +291,24 @@ export class AttendanceService {
     at: Date,
     personId?: string,
     permissionId?: string,
+    guardianId?: string,
   ) {
+    if (guardianId) {
+      if (personId || permissionId)
+        throw AppErrors.validationFailed('Choose either a guardian or an authorized pickup person');
+      const link = await tx.childGuardian.findFirst({
+        where: { childId, guardianId, guardian: { deletedAt: null } },
+        include: { guardian: true },
+      });
+      if (!link) throw AppErrors.conflict('PICKUP_NOT_AUTHORIZED');
+      return {
+        id: null,
+        pickupPersonId: null,
+        pickupGuardianId: guardianId,
+        pickupPerson: null,
+        adhocFullName: link.guardian.fullName,
+      };
+    }
     if (!personId && !permissionId) throw AppErrors.conflict('PICKUP_AUTHORIZATION_REQUIRED');
     const date = dateOnly(todayInTashkent(at));
     const permission = await tx.pickupPermission.findFirst({
@@ -420,6 +437,7 @@ export class AttendanceService {
         at,
         dto.pickupPersonId,
         dto.pickupPermissionId,
+        dto.guardianId,
       );
       const updated = await tx.attendanceDay.update({
         where: { id: row.id },
@@ -429,6 +447,7 @@ export class AttendanceService {
           checkOutNote: dto.note,
           pickupPersonId: permission.pickupPersonId,
           pickupPermissionId: permission.id,
+          pickupGuardianId: permission.pickupGuardianId ?? null,
         },
         include: { child: this.childSelect },
       });
@@ -567,6 +586,7 @@ export class AttendanceService {
               at,
               row.pickupPersonId ?? undefined,
               row.pickupPermissionId ?? undefined,
+              row.pickupGuardianId ?? undefined,
             );
         } else {
           const permission = await this.authorizedPickup(
@@ -577,6 +597,7 @@ export class AttendanceService {
           );
           data.pickupPersonId = permission.pickupPersonId;
           data.pickupPermissionId = permission.id;
+          data.pickupGuardianId = null;
         }
         const updated = await tx.attendanceDay.update({
           where: { id },

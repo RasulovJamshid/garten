@@ -6,6 +6,7 @@ class Session extends ChangeNotifier {
   Session(this.api) {
     api.onExpired = () {
       profile = null;
+      references.clear();
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
       notifyListeners();
@@ -14,23 +15,43 @@ class Session extends ChangeNotifier {
   final ApiClient api;
   Json? profile;
   String language = 'uz';
+  ThemeMode themeMode = ThemeMode.system;
   bool loading = true;
   Object? startupError;
   bool _legacyProfile = false;
+  final references = <String, Map<String, Json>>{};
+  void rememberReference(String kind, Json row, {String valueKey = 'id'}) {
+    final id = row[valueKey]?.toString();
+    if (id != null && id.isNotEmpty) (references[kind] ??= {})[id] = row;
+  }
+
   String get accessKey => profile == null
       ? 'signed-out'
       : jsonEncode([
           object(profile!['user'])['id'],
           object(profile!['organization'])['id'],
-          profile!['permissionsVersion'],
-          profile!['permissions'],
-          profile!['branchIds'],
-          profile!['ownGroupIds'],
+          {
+            for (final key in (object(
+              profile!['permissions'],
+            ).keys.toList()..sort()))
+              key: object(profile!['permissions'])[key],
+          },
+          ((profile!['branchIds'] as List?)
+                    ?.map((v) => v.toString())
+                    .toList() ??
+                [])
+            ..sort(),
+          ((profile!['ownGroupIds'] as List?)
+                    ?.map((v) => v.toString())
+                    .toList() ??
+                [])
+            ..sort(),
         ]);
   bool can(String permission) =>
       object(profile?['permissions'])[permission] != null;
   String get name =>
       object(profile?['user'])['fullName']?.toString() ?? 'Alishax Kids';
+  List<Json> get roles => records(profile?['roles']);
   List<Json> get groups => records(profile?['groups']);
   List<Json> get branches => records(profile?['branches']);
 
@@ -40,6 +61,12 @@ class Session extends ChangeNotifier {
     notifyListeners();
     try {
       language = await api.secrets.read('language') ?? 'uz';
+      final appearance = await api.secrets.read('themeMode');
+      themeMode =
+          ThemeMode.values
+              .where((mode) => mode.name == appearance)
+              .firstOrNull ??
+          ThemeMode.system;
       if (await api.restore()) await reload();
     } catch (e) {
       startupError = e;
@@ -104,7 +131,15 @@ class Session extends ChangeNotifier {
         'moneyUnit': 'tiyin',
       };
     }
+    final previousAccess = accessKey;
     profile = data;
+    if (accessKey != previousAccess) references.clear();
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode value) async {
+    await api.secrets.write('themeMode', value.name);
+    themeMode = value;
     notifyListeners();
   }
 

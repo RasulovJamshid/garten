@@ -1,13 +1,25 @@
 name: Mobile
 on:
   push:
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'src/**', 'openapi.json', 'scripts/generate-mobile-contract.cjs', '.github/workflows/mobile.yml']
   pull_request:
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'src/**', 'openapi.json', 'scripts/generate-mobile-contract.cjs', '.github/workflows/mobile.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run mobile:contract:check
+      - run: npm run mobile:localization:check
+      - run: npm run mobile:workflows:check
   android:
     runs-on: ubuntu-latest
     defaults:

@@ -7,6 +7,11 @@ import 'common.dart';
 import 'payment.dart';
 import 'resources.dart';
 import 'editors.dart';
+import 'features.dart';
+import 'profile.dart';
+import '../core/workflows.dart';
+import '../core/features.dart';
+import 'workflows.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -87,8 +92,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 Text(
                   tr(context, selected),
                   style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -133,18 +138,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
           bottomNavigationBar: wide
               ? null
-              : NavigationBar(
-                  selectedIndex: index,
-                  onDestinationSelected: (i) =>
-                      setState(() => selected = tabs[i].$1),
-                  destinations: tabs
-                      .map(
-                        (t) => NavigationDestination(
-                          icon: Icon(t.$2),
-                          label: tr(context, t.$1),
-                        ),
-                      )
-                      .toList(),
+              : DecoratedBox(
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFFE5E9F0))),
+                  ),
+                  child: NavigationBar(
+                    selectedIndex: index,
+                    onDestinationSelected: (i) =>
+                        setState(() => selected = tabs[i].$1),
+                    destinations: tabs
+                        .map(
+                          (t) => NavigationDestination(
+                            icon: Icon(t.$2),
+                            label: tr(context, t.$1),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
         );
       },
@@ -162,6 +172,28 @@ class TodayPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = AppScope.of(context);
+    void open(Widget page) =>
+        Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
+    final shortcuts = <(IconData, String, VoidCallback)>[
+      if (session.can('attendance:read'))
+        (Icons.fact_check_outlined, 'attendance', onAttendance),
+      if (session.can('child:read'))
+        (Icons.child_care_rounded, 'children', onChildren),
+      if (session.can('payment:create'))
+        (
+          Icons.add_card_rounded,
+          'recordPayment',
+          () => open(const PaymentPage()),
+        ),
+      if (session.can('child:create'))
+        (Icons.person_add_alt_rounded, 'addChild', () => addChild(context)),
+      for (final spec in modules.where(
+        (m) =>
+            ['debts', 'announcements', 'groups'].contains(m.title) &&
+            session.can(m.permission),
+      ))
+        (spec.icon, spec.title, () => open(ResourcePage(spec: spec))),
+    ];
     return RefreshIndicator(
       onRefresh: () async {
         try {
@@ -170,101 +202,172 @@ class TodayPage extends StatelessWidget {
           if (context.mounted) toast(context, errorText(context, e));
         }
       },
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(26),
-            decoration: BoxDecoration(
-              color: navy,
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 650
+              ? 3
+              : MediaQuery.textScalerOf(context).scale(14) < 20
+              ? 2
+              : 1;
+          final width =
+              (constraints.maxWidth - 40 - (columns - 1) * 12) / columns;
+          return ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3C57B8), Color(0xFF243B89)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.wb_sunny_rounded, color: amber),
-                    const SizedBox(width: 10),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.wb_sunny_outlined,
+                          color: Color(0xFFFFD57E),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dateText(today()),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.auto_awesome_outlined,
+                          color: Colors.white54,
+                          size: 22,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     Text(
-                      dateText(today()),
-                      style: const TextStyle(color: Colors.white70),
+                      session.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        height: 1.3,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      tr(context, 'workspaceSubtitle'),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 26),
-                Text(
-                  session.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
+              ),
+              const SizedBox(height: 16),
+              Card(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  tr(context, 'workspace'),
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-              ],
-            ),
-          ),
-          SectionTitle(tr(context, 'quickActions')),
-          if (session.can('child:create'))
-            action(
-              context,
-              Icons.person_add_alt,
-              'addChild',
-              () => addChild(context),
-            ),
-          if (session.can('attendance:read'))
-            action(
-              context,
-              Icons.fact_check_outlined,
-              'attendance',
-              onAttendance,
-            ),
-          if (session.can('child:read'))
-            action(context, Icons.child_care, 'children', onChildren),
-          if (session.can('payment:create'))
-            action(
-              context,
-              Icons.add_card,
-              'recordPayment',
-              () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => const PaymentPage()),
-              ),
-            ),
-          for (final spec in modules.where(
-            (m) =>
-                ['debts', 'announcements', 'groups'].contains(m.title) &&
-                session.can(m.permission),
-          ))
-            action(
-              context,
-              spec.icon,
-              spec.title,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) => ResourcePage(spec: spec),
+                  leading: Icon(
+                    Icons.space_dashboard_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 26,
+                  ),
+                  title: Text(
+                    tr(context, 'allFeatures'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  trailing: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 20,
+                  ),
+                  onTap: () => open(const FeatureWorkspace()),
                 ),
               ),
-            ),
-          if (![
-            'attendance:read',
-            'child:read',
-            'debt:read',
-            'announcement:manage',
-            'group:read',
-          ].any(session.can))
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(tr(context, 'noAccess')),
-            ),
-        ],
+              SectionTitle(tr(context, 'quickActions')),
+              Wrap(
+                spacing: 12,
+                children: [
+                  for (var i = 0; i < shortcuts.length; i++)
+                    SizedBox(
+                      width: width,
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: shortcuts[i].$3,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 128),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (i.isEven
+                                                  ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary
+                                                  : Theme.of(
+                                                      context,
+                                                    ).colorScheme.secondary)
+                                              .withValues(alpha: .08),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      shortcuts[i].$1,
+                                      color: i.isEven
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.secondary,
+                                      size: 23,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    tr(context, shortcuts[i].$2),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (shortcuts.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(tr(context, 'noAccess')),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -277,14 +380,14 @@ Widget action(
   VoidCallback onTap,
 ) => Card(
   child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     leading: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: amber.withValues(alpha: .16),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: .08),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(icon, color: navy),
+      child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
     ),
     title: Text(
       tr(context, title),
@@ -314,17 +417,37 @@ class FinancePage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
         ],
-        for (final spec
-            in modules.take(4).where((m) => session.can(m.permission)))
-          action(
-            context,
-            spec.icon,
-            spec.title,
-            () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(builder: (_) => ResourcePage(spec: spec)),
-            ),
-          ),
+        FutureBuilder<FeatureCatalog>(
+          future: FeatureCatalog.load(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const SizedBox.shrink();
+            final groups = snapshot.data!
+                .available(session)
+                .map((o) => o.group)
+                .toSet();
+            return Column(
+              children: [
+                for (final group in groups.where(
+                  (g) => workflowSpecs[g]?.category == 'moneyWork',
+                ))
+                  action(
+                    context,
+                    featureIcon(group),
+                    group,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => WorkflowSection(
+                          group: group,
+                          catalog: snapshot.data,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -338,18 +461,14 @@ class MorePage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Card(
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(20),
-            leading: PersonAvatar(session.name),
-            title: Text(
-              session.name,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            subtitle: Text(
-              session.profile?['organization']?['name']?.toString() ??
-                  'Alishax Kids',
-            ),
+        const CurrentProfileCard(),
+        action(
+          context,
+          Icons.apps,
+          'allFeatures',
+          () => Navigator.push(
+            context,
+            MaterialPageRoute<void>(builder: (_) => const FeatureWorkspace()),
           ),
         ),
         for (final spec
@@ -365,11 +484,55 @@ class MorePage extends StatelessWidget {
           ),
         SectionTitle(tr(context, 'account')),
         Card(
-          child: SwitchListTile.adaptive(
-            title: Text(tr(context, 'language')),
-            subtitle: Text(session.language == 'ru' ? 'Русский' : 'O‘zbekcha'),
-            value: session.language == 'ru',
-            onChanged: (v) => session.setLanguage(v ? 'ru' : 'uz'),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: DropdownButtonFormField<ThemeMode>(
+              initialValue: session.themeMode,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: tr(context, 'appearance'),
+                prefixIcon: const Icon(Icons.contrast),
+              ),
+              items: [
+                for (final mode in ThemeMode.values)
+                  DropdownMenuItem(
+                    value: mode,
+                    child: Text(tr(context, 'theme_${mode.name}')),
+                  ),
+              ],
+              onChanged: (mode) async {
+                if (mode == null) return;
+                try {
+                  await session.setThemeMode(mode);
+                } catch (e) {
+                  if (context.mounted) toast(context, errorText(context, e));
+                }
+              },
+            ),
+          ),
+        ),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  tr(context, 'language'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'uz', label: Text('O‘zbekcha')),
+                    ButtonSegment(value: 'ru', label: Text('Русский')),
+                  ],
+                  selected: {session.language},
+                  onSelectionChanged: (values) =>
+                      session.setLanguage(values.first),
+                ),
+              ],
+            ),
           ),
         ),
         action(context, Icons.refresh, 'refreshAccess', () async {

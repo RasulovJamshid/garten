@@ -5,6 +5,10 @@ import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
 import 'resources.dart';
+import 'features.dart';
+import '../core/features.dart';
+import 'workflows.dart';
+import 'workflow_task.dart';
 
 class ChildrenPage extends StatefulWidget {
   const ChildrenPage({super.key, this.select = false, this.lookupPermission});
@@ -64,6 +68,26 @@ class _ChildrenPageState extends State<ChildrenPage> {
   Widget build(BuildContext context) {
     final body = Column(
       children: [
+        if (!widget.select && AppScope.of(context).can('child:create'))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: FilledButton.icon(
+              onPressed: () async {
+                final catalog = await FeatureCatalog.load();
+                if (!context.mounted) return;
+                await openWorkflowTask(
+                  context,
+                  catalog,
+                  catalog.operations.firstWhere(
+                    (o) => o.id == 'ChildrenController_create',
+                  ),
+                );
+                if (mounted) load();
+              },
+              icon: const Icon(Icons.person_add_alt),
+              label: Text(tr(context, 'ChildrenController_create')),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(20),
           child: TextField(
@@ -72,6 +96,10 @@ class _ChildrenPageState extends State<ChildrenPage> {
               search = v;
               page = 1;
               generation++;
+              setState(() {
+                rows = null;
+                error = null;
+              });
               debounce = Timer(const Duration(milliseconds: 350), load);
             },
             decoration: InputDecoration(
@@ -226,7 +254,25 @@ class _ChildPageState extends State<ChildPage> {
   Widget build(BuildContext context) {
     final session = AppScope.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(widget.name)),
+      appBar: AppBar(
+        title: Text(widget.name),
+        actions: [
+          IconButton(
+            tooltip: tr(context, 'recordActions'),
+            icon: const Icon(Icons.more_horiz),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => FeatureWorkspace(
+                  contextValues: {'id': widget.id, 'childId': widget.id},
+                  initialRecord: child ?? {},
+                  recordGroup: 'children',
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: error != null
           ? FailureView(error!, load)
           : child == null
@@ -268,11 +314,24 @@ class _ChildPageState extends State<ChildPage> {
                       ),
                     ),
                   ),
+                  FutureBuilder<FeatureCatalog>(
+                    future: FeatureCatalog.load(),
+                    builder: (context, snapshot) => snapshot.hasData
+                        ? WorkflowRecordActions(
+                            group: 'children',
+                            kind: 'childId',
+                            record: child!,
+                            contextValues: {'childId': widget.id},
+                            catalog: snapshot.data!,
+                            onChanged: load,
+                          )
+                        : const SizedBox.shrink(),
+                  ),
                   for (final module in [
                     ResourceSpec(
                       'guardians',
                       '/children/${widget.id}/guardians',
-                      'guardian:read',
+                      'child:read',
                       Icons.family_restroom,
                       ['fullName', 'phone', 'relationship'],
                     ),
@@ -342,7 +401,9 @@ Widget detail(BuildContext context, String label, String value) => Padding(
       Expanded(
         child: Text(
           tr(context, label),
-          style: const TextStyle(color: Colors.black54),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
       const SizedBox(width: 12),

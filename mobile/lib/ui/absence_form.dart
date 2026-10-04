@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/strings.dart';
 
 class AbsenceForm extends StatefulWidget {
-  const AbsenceForm({super.key});
+  const AbsenceForm({super.key, this.childName});
+  final String? childName;
   @override
   State<AbsenceForm> createState() => _AbsenceFormState();
 }
@@ -33,7 +34,7 @@ class _AbsenceFormState extends State<AbsenceForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              tr(context, 'attendance'),
+              widget.childName ?? tr(context, 'attendance'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 20),
