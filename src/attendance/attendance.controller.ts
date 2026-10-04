@@ -15,6 +15,19 @@ import { AttendanceDayDto, AttendanceSummaryRowDto } from './dto/attendance-resp
 export class AttendanceController {
   constructor(private readonly attendance: AttendanceService) {}
 
+  @Get('board')
+  @RequirePermissions('attendance:read')
+  @ApiOperation({
+    summary: 'Today?s complete roster with nullable attendance for unrecorded children',
+  })
+  board(
+    @Auth() ctx: AuthContext,
+    @Query('groupId') groupId?: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.attendance.board(ctx, groupId, branchId);
+  }
+
   @ApiOperation({
     summary: "Get today's attendance",
     description:

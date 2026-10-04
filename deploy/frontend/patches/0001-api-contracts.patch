@@ -1,0 +1,1472 @@
+--- a/src/api/endpoints/attendance.ts
++++ b/src/api/endpoints/attendance.ts
+@@ -2,6 +2,7 @@
+ import { toPage } from "../types";
+ import type {
+   AttendanceCalendarDay,
++  AttendanceBoardResponse,
+   AttendanceCorrection,
+   AttendanceRecord,
+   AttendanceSummaryRow,
+@@ -24,6 +25,8 @@
+ }
+ 
+ export const attendanceApi = {
++  board: (params: { groupId?: string; branchId?: string } = {}) =>
++    api.get<AttendanceBoardResponse>("/attendance/board", params as QueryParams),
+   today: (params: { groupId?: string; branchId?: string } = {}) =>
+     api.get<AttendanceRecord[]>("/attendance/today", params as QueryParams),
+ 
+--- a/src/api/endpoints/auth.ts
++++ b/src/api/endpoints/auth.ts
+@@ -1,6 +1,7 @@
+ import { api } from "../http";
+ import { setAccessToken } from "../token-store";
+ import type {
++  BootstrapResponse,
+   ChangePasswordDto,
+   LoginDto,
+   LoginResponse,
+@@ -16,6 +17,7 @@
+   },
+ 
+   me: () => api.get<MeResponse>("/auth/me"),
++  bootstrap: () => api.get<BootstrapResponse>("/auth/bootstrap"),
+ 
+   async logout(): Promise<void> {
+     try {
+--- a/src/api/endpoints/children.ts
++++ b/src/api/endpoints/children.ts
+@@ -54,10 +54,24 @@
+   expiringDocuments: (withinDays = 30) =>
+     api.get<ChildDocument[]>("/documents/expiring", { withinDays }),
+ 
+-  medical: (id: Id) => api.get<MedicalRecord>(`/children/${id}/medical`),
++  medical: async (id: Id): Promise<MedicalRecord> => {
++    const response = await api.get<{
++      record: MedicalRecord | null;
++      allergies: MedicalRecord["allergies"];
++      medications: MedicalRecord["medications"];
++    }>(`/children/${id}/medical`);
++    return {
++      ...(response.record ?? {}),
++      allergies: response.allergies ?? [],
++      medications: response.medications ?? [],
++    };
++  },
+   saveMedical: (id: Id, dto: MedicalRecord) =>
+     api.put<MedicalRecord>(`/children/${id}/medical`, dto),
+-  medicalAlerts: (id: Id) => api.get<MedicalAlert[]>(`/children/${id}/medical/alerts`),
++  medicalAlerts: (id: Id) =>
++    api.get<{ allergies: MedicalAlert[]; emergencyInstructions: string | null }>(
++      `/children/${id}/medical/alerts`,
++    ),
+ 
+   consents: (id: Id) => api.get<Consent[]>(`/children/${id}/consents`),
+   recordConsent: (
+--- /dev/null
++++ b/src/api/endpoints/lookups.ts
+@@ -0,0 +1,32 @@
++import { api } from "../http";
++import type { Paginated } from "../types";
++
++export type ChildLookupPermission =
++  | "child:read"
++  | "payment:read"
++  | "payment:create"
++  | "charge:read"
++  | "charge:generate"
++  | "billing_rules:manage"
++  | "pickup:read"
++  | "attendance:checkin";
++
++export interface ChildLookupOption {
++  id: string;
++  firstName: string;
++  lastName: string;
++  branchId: string;
++}
++
++export const lookupsApi = {
++  children: (params: {
++    permission: ChildLookupPermission;
++    q?: string;
++    groupId?: string;
++    branchId?: string;
++    page?: number;
++    limit?: number;
++  }) => api.get<Paginated<ChildLookupOption>>("/lookups/children", params),
++  payers: (childId: string) =>
++    api.get<{ id: string; fullName: string }[]>(`/lookups/children/${childId}/payers`),
++};
+--- a/src/api/endpoints/pickup.ts
++++ b/src/api/endpoints/pickup.ts
+@@ -1,9 +1,11 @@
+ import { api } from "../http";
++import { pickupSelection } from "../pickup-selection";
+ import type {
+   CreatePickupPersonDto,
+   Id,
+   PickupHistoryEntry,
+   PickupPerson,
++  PickupPermission,
+   PickupVerifyResult,
+   TemporaryPermissionDto,
+   UpdatePickupPersonDto,
+@@ -20,13 +22,13 @@
+     api.post<PickupPerson>(`/pickup-persons/${id}/revoke`, { reason }),
+ 
+   activePermissions: (childId: Id, date?: string) =>
+-    api.get<PickupPerson[]>("/pickup-permissions/active", { childId, date }),
++    api.get<PickupPermission[]>("/pickup-permissions/active", { childId, date }),
+   createTemporary: (dto: TemporaryPermissionDto) =>
+-    api.post<PickupPerson>("/pickup-permissions/temporary", dto),
++    api.post<PickupPermission>("/pickup-permissions/temporary", dto),
+ 
+   history: (childId: Id) => api.get<PickupHistoryEntry[]>(`/children/${childId}/pickup-history`),
+ 
+   /** Qabulxona bolani berishdan oldin shu yerdan tasdiqlaydi. */
+   verify: (childId: Id, pickupPersonId: Id) =>
+-    api.get<PickupVerifyResult>("/pickup/verify", { childId, pickupPersonId }),
++    api.get<PickupVerifyResult>("/pickup/verify", { childId, ...pickupSelection(pickupPersonId) }),
+ };
+--- a/src/api/http.ts
++++ b/src/api/http.ts
+@@ -162,7 +162,8 @@
+ };
+ 
+ export type ExportResult =
+-  { kind: "job"; jobId: string } | { kind: "file"; blob: Blob; fileName?: string };
++  | { kind: "job"; jobId: string }
++  | { kind: "file"; blob: Blob; fileName?: string };
+ 
+ /** `Content-Disposition` dan fayl nomini ajratadi. */
+ export function fileNameFrom(response: Response): string | undefined {
+--- a/src/api/index.ts
++++ b/src/api/index.ts
+@@ -13,6 +13,7 @@
+ export type { ErrorCode, KnownErrorCode } from "./error";
+ 
+ export { authApi } from "./endpoints/auth";
++export * from "./endpoints/lookups";
+ export { childrenApi } from "./endpoints/children";
+ export { guardiansApi } from "./endpoints/guardians";
+ export { groupsApi } from "./endpoints/groups";
+--- /dev/null
++++ b/src/api/pickup-selection.ts
+@@ -0,0 +1,8 @@
++export function pickupSelection(value: string): {
++  pickupPersonId?: string;
++  pickupPermissionId?: string;
++} {
++  return value.startsWith("permission:")
++    ? { pickupPermissionId: value.slice("permission:".length) }
++    : { pickupPersonId: value };
++}
+--- a/src/api/types/attendance.ts
++++ b/src/api/types/attendance.ts
+@@ -2,7 +2,13 @@
+ import type { MedicalAlert } from "./people";
+ 
+ export type AttendanceStatus =
+-  "present" | "late" | "early_departure" | "absent" | "sick" | "vacation" | "excused";
++  | "present"
++  | "late"
++  | "early_departure"
++  | "absent"
++  | "sick"
++  | "vacation"
++  | "excused";
+ 
+ /** Davomat yozuvida foydalanuvchi qo'lda qo'yadigan holatlar. */
+ export type AbsenceStatus = "absent" | "sick" | "vacation" | "excused";
+@@ -24,6 +30,34 @@
+   alerts?: MedicalAlert[];
+ }
+ 
++export interface AttendanceBoardResponse {
++  date: IsoDate;
++  data: {
++    child: {
++      id: Id;
++      firstName: string;
++      lastName: string;
++      branchId: Id;
++      groupAssignment: { groupId: Id; childGroup: { name: string } }[];
++    };
++    attendance: AttendanceRecord | null;
++    recorded: boolean;
++  }[];
++}
++
++export interface PickupPermission {
++  id: Id;
++  childId: Id;
++  pickupPersonId?: Id | null;
++  pickupPerson?: PickupPerson | null;
++  permissionType: PermissionType;
++  adhocFullName?: string | null;
++  adhocPhone?: string | null;
++  validFrom: IsoDate;
++  validTo?: IsoDate | null;
++  revokedAt?: IsoDateTime | null;
++}
++
+ export interface CheckInDto {
+   childId: Id;
+   at?: IsoDateTime;
+@@ -33,6 +67,7 @@
+ 
+ export interface CheckOutDto {
+   childId: Id;
++  pickupPermissionId?: Id;
+   pickupPersonId?: Id;
+   at?: IsoDateTime;
+   note?: string;
+@@ -141,6 +176,8 @@
+ 
+ export interface PickupVerifyResult {
+   allowed: boolean;
++  pickupName?: string | null;
++  permissionId?: Id | null;
+   reason?: string;
+   person?: PickupPerson;
+   photoUrl?: string;
+--- a/src/api/types/auth.ts
++++ b/src/api/types/auth.ts
+@@ -29,6 +29,12 @@
+   permissionsVersion: number;
+ }
+ 
++export interface BootstrapResponse extends MeResponse {
++  branches: { id: Id; name: string; code: string; status: string }[];
++  groups: { id: Id; branchId: Id; name: string; status: string }[];
++  ownGroupIds: Id[];
++}
++
+ export interface LoginDto {
+   login: string;
+   password: string;
+--- a/src/api/types/comms.ts
++++ b/src/api/types/comms.ts
+@@ -64,7 +64,7 @@
+   includeAmounts?: boolean;
+ }
+ 
+-export type NotificationChannel = "telegram" | "sms" | "internal" | "email";
++export type NotificationChannel = "telegram" | "internal";
+ export type NotificationStatus = "queued" | "sent" | "delivered" | "failed";
+ 
+ export interface NotificationAttempt {
+--- a/src/api/types/people.ts
++++ b/src/api/types/people.ts
+@@ -145,7 +145,11 @@
+ }
+ 
+ export type ConsentType =
+-  "personal_data" | "photography" | "medical_storage" | "notifications" | "mobile_access";
++  | "personal_data"
++  | "photography"
++  | "medical_storage"
++  | "notifications"
++  | "mobile_access";
+ 
+ export interface Consent {
+   id: Id;
+--- a/src/api/types/system.ts
++++ b/src/api/types/system.ts
+@@ -71,7 +71,12 @@
+ }
+ 
+ export type ImportEntity =
+-  "children" | "guardians" | "groups" | "users" | "opening_balances" | "expenses";
++  | "children"
++  | "guardians"
++  | "groups"
++  | "users"
++  | "opening_balances"
++  | "expenses";
+ 
+ export interface ImportRowError {
+   row: number;
+--- a/src/auth/auth-context.ts
++++ b/src/auth/auth-context.ts
+@@ -1,4 +1,6 @@
+ import { createContext, useContext, useMemo } from "react";
++import { useQuery } from "@tanstack/react-query";
++import { authApi } from "@/api";
+ import type { AuthUser, MeResponse, PermissionMap, RoleRef, Scope } from "@/api";
+ 
+ export type AuthStatus = "loading" | "authenticated" | "anonymous";
+@@ -22,6 +24,16 @@
+   const context = useContext(AuthContext);
+   if (!context) throw new Error("useAuth faqat AuthProvider ichida ishlatiladi");
+   return context;
++}
++
++export function useBootstrapLookups() {
++  const { status, user, permissionsVersion } = useAuth();
++  return useQuery({
++    queryKey: ["auth", "bootstrap", user?.id, permissionsVersion],
++    queryFn: () => authApi.bootstrap(),
++    enabled: status === "authenticated",
++    staleTime: 60 * 1000,
++  });
+ }
+ 
+ export interface PermissionApi {
+--- a/src/components/common/EntityPicker.tsx
++++ b/src/components/common/EntityPicker.tsx
+@@ -2,7 +2,7 @@
+ import { useQuery } from "@tanstack/react-query";
+ import { useTranslation } from "react-i18next";
+ import { Check, ChevronsUpDown } from "lucide-react";
+-import { childrenApi, guardiansApi } from "@/api";
++import { guardiansApi, lookupsApi, type ChildLookupPermission } from "@/api";
+ import { Button } from "@/components/ui/button";
+ import { Label } from "@/components/ui/label";
+ import {
+@@ -116,23 +116,26 @@
+ }
+ 
+ /** Bolani qidirib tanlash — ro'yxat serverda filtrlanadi. */
+-export function ChildPicker(props: PickerProps & { groupId?: string }) {
++export function ChildPicker(
++  props: PickerProps & { groupId?: string; permission?: ChildLookupPermission },
++) {
++  const permission = props.permission ?? "child:read";
+   const [query, setQuery] = useState("");
+   const debounced = useDebouncedValue(query);
+   const params = useMemo(
+-    () => ({ q: debounced.trim() || undefined, groupId: props.groupId, limit: 20 }),
+-    [debounced, props.groupId],
++    () => ({ permission, q: debounced.trim() || undefined, groupId: props.groupId, limit: 20 }),
++    [debounced, props.groupId, permission],
+   );
+ 
+   const { data, isLoading } = useQuery({
+-    queryKey: qk.children(params),
+-    queryFn: () => childrenApi.list(params),
++    queryKey: ["lookups", "children", params],
++    queryFn: () => lookupsApi.children(params),
++    enabled: !props.disabled,
+   });
+ 
+   const options = (data?.data ?? []).map((child) => ({
+     value: child.id,
+     label: `${child.lastName} ${child.firstName}`,
+-    hint: child.groupName,
+   }));
+ 
+   return (
+@@ -147,21 +150,34 @@
+ }
+ 
+ /** Ota-onani qidirib tanlash. */
+-export function GuardianPicker(props: PickerProps) {
++export function GuardianPicker(props: PickerProps & { paymentChildId?: string }) {
+   const [query, setQuery] = useState("");
+   const debounced = useDebouncedValue(query);
+   const params = useMemo(() => ({ q: debounced.trim() || undefined, limit: 20 }), [debounced]);
+ 
+-  const { data, isLoading } = useQuery({
++  const payment = props.paymentChildId !== undefined;
++  const guardians = useQuery({
+     queryKey: qk.guardians(params),
+     queryFn: () => guardiansApi.list(params),
++    enabled: !payment && !props.disabled,
+   });
+-
+-  const options = (data?.data ?? []).map((guardian) => ({
+-    value: guardian.id,
+-    label: guardian.fullName,
+-    hint: guardian.phone,
+-  }));
++  const payers = useQuery({
++    queryKey: ["lookups", "payers", props.paymentChildId],
++    queryFn: () => lookupsApi.payers(props.paymentChildId!),
++    enabled: payment && Boolean(props.paymentChildId) && !props.disabled,
++  });
++  const isLoading = payment ? payers.isLoading : guardians.isLoading;
++  const options = payment
++    ? (payers.data ?? [])
++        .filter((guardian) =>
++          guardian.fullName.toLocaleLowerCase().includes(debounced.trim().toLocaleLowerCase()),
++        )
++        .map((guardian) => ({ value: guardian.id, label: guardian.fullName }))
++    : (guardians.data?.data ?? []).map((guardian) => ({
++        value: guardian.id,
++        label: guardian.fullName,
++        hint: guardian.phone,
++      }));
+ 
+   return (
+     <Picker
+--- a/src/components/common/FileUploadField.tsx
++++ b/src/components/common/FileUploadField.tsx
+@@ -52,7 +52,7 @@
+       }
+       setUploading(true);
+       try {
+-        const uploaded = await filesApi.upload(file, entityType, entityId);
++        const uploaded = await filesApi.upload(file, entityId ? entityType : undefined, entityId);
+         uploadedHere.current.add(uploaded.fileId);
+         onChange(uploaded.fileId);
+         setFileName(file.name);
+--- a/src/components/forms/schemas/comms.ts
++++ b/src/components/forms/schemas/comms.ts
+@@ -25,7 +25,7 @@
+ 
+ export const sendNotificationSchema = z.object({
+   templateKey: requiredText(),
+-  channel: z.enum(["telegram", "sms", "internal", "email"]),
++  channel: z.enum(["telegram", "internal"]),
+   recipientIds: z.array(z.string()).min(1, "common.validation.required"),
+   dataJson: optionalText,
+ });
+--- a/src/components/layout/BranchSwitcher.tsx
++++ b/src/components/layout/BranchSwitcher.tsx
+@@ -8,7 +8,7 @@
+   DropdownMenuTrigger,
+ } from "@/components/ui/dropdown-menu";
+ import { useBranch } from "@/auth/use-branch";
+-import { useBranches } from "@/features/settings/api";
++import { useBootstrapLookups } from "@/auth/auth-context";
+ import { cn, focusRing } from "@/lib/utils";
+ 
+ /**
+@@ -21,11 +21,11 @@
+ export function BranchSwitcher() {
+   const { t } = useTranslation();
+   const { branchId, branchIds, canSwitch, setBranch } = useBranch();
+-  const { data } = useBranches();
++  const { data } = useBootstrapLookups();
+ 
+   if (!canSwitch) return null;
+ 
+-  const mine = (data ?? []).filter((branch) => branchIds.includes(branch.id));
++  const mine = (data?.branches ?? []).filter((branch) => branchIds.includes(branch.id));
+   const currentName = mine.find((branch) => branch.id === branchId)?.name ?? branchId;
+ 
+   return (
+--- a/src/features/attendance/api.ts
++++ b/src/features/attendance/api.ts
+@@ -35,10 +35,11 @@
+   });
+ }
+ 
+-export function useInside() {
++export function useInside(enabled = true) {
+   return useQuery({
+     queryKey: qk.attendanceInside,
+     queryFn: () => attendanceApi.inside(),
++    enabled,
+     refetchInterval: ATTENDANCE_POLL_MS,
+     refetchOnWindowFocus: true,
+   });
+--- a/src/features/attendance/AttendancePage.tsx
++++ b/src/features/attendance/AttendancePage.tsx
+@@ -11,8 +11,10 @@
+ 
+ export function AttendancePage() {
+   const { t } = useTranslation();
+-  const { canAny } = usePermissions();
++  const { can, canAny, scopeOf } = usePermissions();
+   const canManage = canAny(P.attendanceCheckIn, P.attendanceCheckOut);
++  const canReadHistory = scopeOf(P.attendanceRead) !== "today";
++  const canCorrect = can(P.attendanceCorrect);
+ 
+   return (
+     <div className="space-y-6">
+@@ -21,23 +23,35 @@
+       <Tabs defaultValue="board">
+         <TabsList>
+           <TabsTrigger value="board">{t("attendance.tabs.board")}</TabsTrigger>
+-          <TabsTrigger value="journal">{t("attendance.tabs.journal")}</TabsTrigger>
+-          <TabsTrigger value="summary">{t("attendance.tabs.summary")}</TabsTrigger>
+-          <TabsTrigger value="corrections">{t("attendance.tabs.corrections")}</TabsTrigger>
++          {canReadHistory ? (
++            <TabsTrigger value="journal">{t("attendance.tabs.journal")}</TabsTrigger>
++          ) : null}
++          {canReadHistory ? (
++            <TabsTrigger value="summary">{t("attendance.tabs.summary")}</TabsTrigger>
++          ) : null}
++          {canCorrect ? (
++            <TabsTrigger value="corrections">{t("attendance.tabs.corrections")}</TabsTrigger>
++          ) : null}
+         </TabsList>
+ 
+         <TabsContent value="board">
+           <AttendanceBoard canManage={canManage} />
+         </TabsContent>
+-        <TabsContent value="journal">
+-          <AttendanceJournal canManage={canManage} />
+-        </TabsContent>
+-        <TabsContent value="summary">
+-          <AttendanceSummaryTab />
+-        </TabsContent>
+-        <TabsContent value="corrections">
+-          <CorrectionsLog />
+-        </TabsContent>
++        {canReadHistory ? (
++          <TabsContent value="journal">
++            <AttendanceJournal canManage={canCorrect} />
++          </TabsContent>
++        ) : null}
++        {canReadHistory ? (
++          <TabsContent value="summary">
++            <AttendanceSummaryTab />
++          </TabsContent>
++        ) : null}
++        {canCorrect ? (
++          <TabsContent value="corrections">
++            <CorrectionsLog />
++          </TabsContent>
++        ) : null}
+       </Tabs>
+     </div>
+   );
+--- a/src/features/attendance/components/AttendanceCard.tsx
++++ b/src/features/attendance/components/AttendanceCard.tsx
+@@ -14,6 +14,8 @@
+ import { formatTime } from "@/lib/dates";
+ import { cn, focusRing } from "@/lib/utils";
+ import { CheckOutDialog } from "./CheckOutDialog";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ const ABSENCE: AbsenceStatus[] = ["absent", "sick", "vacation", "excused"];
+ 
+@@ -47,6 +49,7 @@
+   onSetStatus,
+ }: AttendanceCardProps) {
+   const { t } = useTranslation();
++  const { can } = usePermissions();
+ 
+   const inside = Boolean(row.checkInAt && !row.checkOutAt);
+   const hasAlert = Boolean(row.alerts && row.alerts.length > 0);
+@@ -102,7 +105,7 @@
+ 
+       {canManage ? (
+         <div className="mt-auto flex items-center gap-1 pt-1">
+-          {!row.checkInAt ? (
++          {!row.checkInAt && can(P.attendanceCheckIn) ? (
+             // Bir teginish, oyna yo'q, vaqt tanlagich yo'q — vaqtni server qo'yadi.
+             <Button className="h-11 flex-1 text-base" onClick={() => onCheckIn(row.childId)}>
+               <LogIn className="mr-1.5 h-4 w-4" />
+@@ -110,7 +113,7 @@
+             </Button>
+           ) : null}
+ 
+-          {inside ? (
++          {inside && can(P.attendanceCheckOut) && can(P.pickupRead) ? (
+             <CheckOutDialog
+               childId={row.childId}
+               childName={name}
+@@ -118,7 +121,7 @@
+             />
+           ) : null}
+ 
+-          {!row.checkInAt ? (
++          {!row.checkInAt && can(P.attendanceCheckIn) ? (
+             <DropdownMenu>
+               <DropdownMenuTrigger
+                 aria-label={t("attendance.setStatus")}
+--- a/src/features/attendance/components/AttendanceJournal.tsx
++++ b/src/features/attendance/components/AttendanceJournal.tsx
+@@ -23,11 +23,14 @@
+ import { CorrectionDialog } from "./CorrectionDialog";
+ import { SetStatusDialog } from "./SetStatusDialog";
+ import { DateField } from "@/components/common/DateField";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ /** Sana oralig'i bo'yicha davomat jurnali va tuzatish amali. */
+ export function AttendanceJournal({ canManage }: { canManage: boolean }) {
+   // Ism javobda bo'lmasa bolalar ro'yxatidan olinadi.
+   const lookup = useChildLookup();
++  const { can } = usePermissions();
+   const { t } = useTranslation();
+   const groups = useGroupOptions();
+   const [from, setFrom] = useState(todayIso());
+@@ -86,7 +89,7 @@
+           Lekin o'tgan kun yoki oldindan ta'til uchun sana tanlash zarur —
+           shuning uchun bu amal jurnalda, ya'ni ma'muriy joyda turadi.
+         */}
+-        {canManage ? <SetStatusDialog date={from} /> : null}
++        {canManage && can(P.attendanceCheckIn) ? <SetStatusDialog date={from} /> : null}
+       </FilterBar>
+ 
+       <QueryState
+--- a/src/features/attendance/components/SetStatusDialog.tsx
++++ b/src/features/attendance/components/SetStatusDialog.tsx
+@@ -68,6 +68,7 @@
+       <div className="space-y-3">
+         {childId ? null : (
+           <ChildPicker
++            permission="attendance:checkin"
+             label={t("common.labels.child")}
+             value={watch("childId")}
+             onChange={(value) => setValue("childId", value, { shouldValidate: true })}
+--- a/src/features/attendance/use-board-rows.ts
++++ b/src/features/attendance/use-board-rows.ts
+@@ -1,87 +1,33 @@
+-import { useMemo } from "react";
+-import { LIST_LIMIT_MAX, type AttendanceRecord } from "@/api";
+-import { useChildren } from "@/features/children/api";
+-import { todayIso } from "@/lib/dates";
+-import { useAttendanceToday } from "./api";
++import { useQuery } from "@tanstack/react-query";
++import { attendanceApi, type AttendanceRecord } from "@/api";
++import { ATTENDANCE_POLL_MS } from "@/config/constants";
+ 
+-/**
+- * Taxta qatorlari: BOLALAR REYESTRI + bugungi davomat yozuvlari.
+- *
+- * `GET /attendance/today` faqat yozuvi BOR bolalarni qaytaradi. Ertalab,
+- * hech kim belgilanmagan paytda u bo'sh bo'ladi — ya'ni davomat qilish uchun
+- * ro'yxatda hech kim chiqmaydi. Yozuv esa aynan shu ekranda YARATILADI,
+- * demak asos yozuvlar emas, kutilayotgan bolalar ro'yxati bo'lishi kerak.
+- *
+- * Shuning uchun bu yerda reyestr olinadi va bugungi yozuvlar ustiga
+- * qo'yiladi: yozuvi yo'q bola «belgilanmagan» bo'lib turadi va uni bir
+- * teginishda belgilash mumkin.
+- */
+ export function useBoardRows(params: { groupId?: string; branchId?: string }): {
+   rows: AttendanceRecord[];
+   isLoading: boolean;
+   error: unknown;
+   refetch: () => void;
+ } {
+-  const attendance = useAttendanceToday(params);
+-  const roster = useChildren({
+-    limit: LIST_LIMIT_MAX,
+-    groupId: params.groupId,
+-    branchId: params.branchId,
+-    status: "active",
++  const board = useQuery({
++    queryKey: ["attendance", "board", params],
++    queryFn: () => attendanceApi.board(params),
++    refetchInterval: ATTENDANCE_POLL_MS,
++    refetchOnWindowFocus: true,
+   });
+-
+-  const today = todayIso();
+-
+-  const rows = useMemo<AttendanceRecord[]>(() => {
+-    const byChild = new Map((attendance.data ?? []).map((row) => [row.childId, row]));
+-    const merged: AttendanceRecord[] = [];
+-
+-    for (const child of roster.data?.data ?? []) {
+-      const record = byChild.get(child.id);
+-      if (record) {
+-        /*
+-          Yetishmayotgan maydonlar reyestrdan to'ldiriladi: server javobida
+-          guruh nomi har doim ham kelmaydi, optimistik qatorda esa umuman
+-          bo'lmaydi. Usiz endigina belgilangan bola guruhidan tushib,
+-          «Guruhsiz» bo'limiga sakrab ketardi.
+-        */
+-        merged.push({
+-          ...record,
+-          groupId: record.groupId ?? child.groupId,
+-          groupName: record.groupName ?? child.groupName,
+-          childName:
+-            record.childName ?? [child.lastName, child.firstName].filter(Boolean).join(" ").trim(),
+-        });
+-        byChild.delete(child.id);
+-        continue;
+-      }
+-      /*
+-        Yozuvsiz bola. `id` sun'iy va faqat React kaliti sifatida ishlatiladi:
+-        amallar `childId` va sana bilan ketadi, shuning uchun bu qiymat hech
+-        qachon serverga tushmaydi.
+-      */
+-      merged.push({
+-        id: `pending:${child.id}`,
+-        childId: child.id,
+-        childName: [child.lastName, child.firstName].filter(Boolean).join(" ").trim(),
+-        groupId: child.groupId,
+-        groupName: child.groupName,
+-        date: today,
+-      });
+-    }
+-
+-    // Reyestrda yo'q, lekin bugun yozuvi bor bola ham tushib qolmasin.
+-    for (const record of byChild.values()) merged.push(record);
+-    return merged;
+-  }, [attendance.data, roster.data, today]);
+-
+   return {
+-    rows,
+-    isLoading: attendance.isLoading || roster.isLoading,
+-    error: attendance.error ?? roster.error,
++    rows: (board.data?.data ?? []).map(({ child, attendance }) => ({
++      ...attendance,
++      id: attendance?.id ?? `pending:${child.id}`,
++      childId: child.id,
++      childName: [child.lastName, child.firstName].filter(Boolean).join(" "),
++      groupId: child.groupAssignment[0]?.groupId,
++      groupName: child.groupAssignment[0]?.childGroup.name,
++      date: board.data!.date,
++    })),
++    isLoading: board.isLoading,
++    error: board.error,
+     refetch: () => {
+-      void attendance.refetch();
+-      void roster.refetch();
++      void board.refetch();
+     },
+   };
+ }
+--- a/src/features/children/api.ts
++++ b/src/features/children/api.ts
+@@ -15,10 +15,11 @@
+ import type { ChildListParams } from "@/api/endpoints/children";
+ import { qk, useApiMutation } from "@/lib/query";
+ 
+-export function useChildren(params: ChildListParams) {
++export function useChildren(params: ChildListParams, enabled = true) {
+   return useQuery({
+     queryKey: qk.children(params),
+     queryFn: () => childrenApi.list(params),
++    enabled,
+     placeholderData: (previous) => previous,
+   });
+ }
+--- a/src/features/children/ChildDetailPage.tsx
++++ b/src/features/children/ChildDetailPage.tsx
+@@ -23,13 +23,16 @@
+ 
+ export function ChildDetailPage({ childId }: { childId: string }) {
+   const { t } = useTranslation();
+-  const { can, canAny } = usePermissions();
++  const { can, canAny, scopeOf } = usePermissions();
+   const { data: child, isLoading, error, refetch } = useChild(childId);
+ 
+-  const canManage = canAny(P.childCreate, P.childUpdate);
++  const canManage = can(P.childUpdate);
++  const canSeeGuardians = can(P.guardianRead);
++  const canSeeConsents = can(P.consentRead);
++  const canSeeAttendance = can(P.attendanceRead) && scopeOf(P.attendanceRead) !== "today";
+   const canSeeMedical = canAny(P.medicalRead, P.medicalAlerts);
+-  const canSeeFinance = canAny(P.paymentRead, P.debtRead, P.chargeRead);
+-  const canSeePickup = canAny(P.pickupRead, P.pickupManage);
++  const canSeeFinance = can(P.chargeRead);
++  const canSeePickup = can(P.pickupRead);
+ 
+   return (
+     <div className="space-y-6">
+@@ -52,18 +55,20 @@
+                 </span>
+               }
+             >
+-              {canManage ? (
++              {canManage || can(P.childStatus) ? (
+                 <div className="flex gap-2">
+                   {can(P.childStatus) ? <ChildStatusDialog child={child} /> : null}
+-                  <ChildFormDialog
+-                    child={child}
+-                    trigger={
+-                      <Button variant="outline" className="h-11">
+-                        <Pencil className="mr-2 h-4 w-4" />
+-                        {t("common.actions.edit")}
+-                      </Button>
+-                    }
+-                  />
++                  {canManage ? (
++                    <ChildFormDialog
++                      child={child}
++                      trigger={
++                        <Button variant="outline" className="h-11">
++                          <Pencil className="mr-2 h-4 w-4" />
++                          {t("common.actions.edit")}
++                        </Button>
++                      }
++                    />
++                  ) : null}
+                 </div>
+               ) : null}
+             </PageHeader>
+@@ -71,28 +76,36 @@
+             <Tabs defaultValue="overview">
+               <TabsList>
+                 <TabsTrigger value="overview">{t("children.tabs.overview")}</TabsTrigger>
+-                <TabsTrigger value="guardians">{t("children.tabs.guardians")}</TabsTrigger>
++                {canSeeGuardians ? (
++                  <TabsTrigger value="guardians">{t("children.tabs.guardians")}</TabsTrigger>
++                ) : null}
+                 <TabsTrigger value="documents">{t("children.tabs.documents")}</TabsTrigger>
+                 {canSeeMedical ? (
+                   <TabsTrigger value="medical">{t("children.tabs.medical")}</TabsTrigger>
+                 ) : null}
+-                <TabsTrigger value="attendance">{t("children.tabs.attendance")}</TabsTrigger>
++                {canSeeAttendance ? (
++                  <TabsTrigger value="attendance">{t("children.tabs.attendance")}</TabsTrigger>
++                ) : null}
+                 {canSeePickup ? (
+                   <TabsTrigger value="pickup">{t("children.tabs.pickup")}</TabsTrigger>
+                 ) : null}
+                 {canSeeFinance ? (
+                   <TabsTrigger value="finance">{t("children.tabs.finance")}</TabsTrigger>
+                 ) : null}
+-                <TabsTrigger value="consents">{t("children.tabs.consents")}</TabsTrigger>
++                {canSeeConsents ? (
++                  <TabsTrigger value="consents">{t("children.tabs.consents")}</TabsTrigger>
++                ) : null}
+                 <TabsTrigger value="history">{t("children.tabs.history")}</TabsTrigger>
+               </TabsList>
+ 
+               <TabsContent value="overview">
+                 <ChildOverviewTab child={child} />
+               </TabsContent>
+-              <TabsContent value="guardians">
+-                <ChildGuardiansTab childId={child.id} canManage={can(P.guardianManage)} />
+-              </TabsContent>
++              {canSeeGuardians ? (
++                <TabsContent value="guardians">
++                  <ChildGuardiansTab childId={child.id} canManage={can(P.guardianManage)} />
++                </TabsContent>
++              ) : null}
+               <TabsContent value="documents">
+                 <ChildDocumentsTab childId={child.id} canManage={canManage} />
+               </TabsContent>
+@@ -101,9 +114,11 @@
+                   <ChildMedicalTab childId={child.id} />
+                 </TabsContent>
+               ) : null}
+-              <TabsContent value="attendance">
+-                <ChildAttendanceTab childId={child.id} />
+-              </TabsContent>
++              {canSeeAttendance ? (
++                <TabsContent value="attendance">
++                  <ChildAttendanceTab childId={child.id} />
++                </TabsContent>
++              ) : null}
+               {canSeePickup ? (
+                 <TabsContent value="pickup">
+                   <ChildPickupTab childId={child.id} canManage={can(P.pickupManage)} />
+@@ -114,9 +129,11 @@
+                   <ChildFinanceTab childId={child.id} />
+                 </TabsContent>
+               ) : null}
+-              <TabsContent value="consents">
+-                <ChildConsentsTab childId={child.id} canManage={can(P.consentManage)} />
+-              </TabsContent>
++              {canSeeConsents ? (
++                <TabsContent value="consents">
++                  <ChildConsentsTab childId={child.id} canManage={can(P.consentManage)} />
++                </TabsContent>
++              ) : null}
+               <TabsContent value="history">
+                 <ChildHistoryTab childId={child.id} />
+               </TabsContent>
+--- a/src/features/children/ChildrenPage.tsx
++++ b/src/features/children/ChildrenPage.tsx
+@@ -35,14 +35,21 @@
+ 
+ export function ChildrenPage() {
+   const { t } = useTranslation();
+-  const { can, canAny } = usePermissions();
++  const { can } = usePermissions();
++  const canSeeDebt = can(P.debtRead);
++  const canSeeAlerts = can(P.medicalAlerts);
+   // `scope` — filtr va sahifa raqami bo'limlar orasida yurganda saqlanadi.
+   const params = useListParams({ groupId: "all", status: "all" }, "lastName:asc");
+   const { data, isLoading, isPlaceholderData, isFetching, error, refetch, dataUpdatedAt } =
+-    useChildren(params.query);
++    useChildren({
++      ...params.query,
++      hasDebt: canSeeDebt && params.filters.hasDebt === "true" ? true : undefined,
++      hasMedicalAlert: canSeeAlerts && params.filters.hasMedicalAlert === "true" ? true : undefined,
++    });
+   const remove = useDeleteChild();
+ 
+-  const canEdit = canAny(P.childCreate, P.childUpdate);
++  const canCreate = can(P.childCreate);
++  const canEdit = can(P.childUpdate);
+   const canDelete = can(P.childDelete);
+ 
+   const handleDelete = useCallback(
+@@ -61,10 +68,10 @@
+   const activeCount = useMemo(() => {
+     let count = params.q.trim() ? 1 : 0;
+     if (params.filters.groupId && params.filters.groupId !== "all") count += 1;
+-    if (params.filters.hasDebt === "true") count += 1;
+-    if (params.filters.hasMedicalAlert === "true") count += 1;
++    if (canSeeDebt && params.filters.hasDebt === "true") count += 1;
++    if (canSeeAlerts && params.filters.hasMedicalAlert === "true") count += 1;
+     return count;
+-  }, [params.q, params.filters]);
++  }, [params.q, params.filters, canSeeDebt, canSeeAlerts]);
+ 
+   const rows = data?.data ?? [];
+ 
+@@ -80,7 +87,7 @@
+           isFetching={isFetching}
+           updatedAt={dataUpdatedAt}
+         />
+-        {canEdit ? (
++        {canCreate ? (
+           <ChildEnrollmentWizard
+             trigger={
+               <Button className="h-11 rounded-xl">
+--- a/src/features/children/components/ChildFilters.tsx
++++ b/src/features/children/components/ChildFilters.tsx
+@@ -3,6 +3,8 @@
+ import { FilterBar, FilterToggle, SearchField } from "@/components/common/FilterBar";
+ import { SelectField } from "@/components/common/SelectField";
+ import { useGroupOptions } from "@/features/groups/api";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ /**
+  * Filtr panelidagi tanlov maydonlarining kengligi. Ilgari bitta panelda
+@@ -37,6 +39,7 @@
+ }: ChildFiltersProps) {
+   const { t } = useTranslation();
+   const groups = useGroupOptions();
++  const { can } = usePermissions();
+ 
+   return (
+     <FilterBar activeCount={activeCount} onReset={onReset}>
+@@ -56,20 +59,24 @@
+       />
+ 
+       <div className="flex flex-wrap items-end gap-2 self-end">
+-        <FilterToggle
+-          icon={Wallet}
+-          checked={filters.hasDebt === "true"}
+-          onCheckedChange={(checked) => onFilterChange("hasDebt", checked ? "true" : "")}
+-        >
+-          {t("children.filters.hasDebt")}
+-        </FilterToggle>
+-        <FilterToggle
+-          icon={HeartPulse}
+-          checked={filters.hasMedicalAlert === "true"}
+-          onCheckedChange={(checked) => onFilterChange("hasMedicalAlert", checked ? "true" : "")}
+-        >
+-          {t("children.filters.hasMedicalAlert")}
+-        </FilterToggle>
++        {can(P.debtRead) ? (
++          <FilterToggle
++            icon={Wallet}
++            checked={filters.hasDebt === "true"}
++            onCheckedChange={(checked) => onFilterChange("hasDebt", checked ? "true" : "")}
++          >
++            {t("children.filters.hasDebt")}
++          </FilterToggle>
++        ) : null}
++        {can(P.medicalAlerts) ? (
++          <FilterToggle
++            icon={HeartPulse}
++            checked={filters.hasMedicalAlert === "true"}
++            onCheckedChange={(checked) => onFilterChange("hasMedicalAlert", checked ? "true" : "")}
++          >
++            {t("children.filters.hasMedicalAlert")}
++          </FilterToggle>
++        ) : null}
+       </div>
+     </FilterBar>
+   );
+--- a/src/features/children/components/ChildMedicalTab.tsx
++++ b/src/features/children/components/ChildMedicalTab.tsx
+@@ -21,19 +21,28 @@
+ function AlertsOnly({ childId }: { childId: string }) {
+   const { t } = useTranslation();
+   const { data, isLoading, error, refetch } = useMedicalAlerts(childId, true);
+-  const alerts = data ?? [];
++  const alerts = data?.allergies ?? [];
++  const emergencyInstructions = data?.emergencyInstructions;
+ 
+   return (
+     <QueryState
+       isLoading={isLoading}
+       error={error}
+-      isEmpty={alerts.length === 0}
++      isEmpty={alerts.length === 0 && !emergencyInstructions}
+       emptyTitle={t("children.medical.empty")}
+       onRetry={() => void refetch()}
+       rows={2}
+     >
+       <div className="space-y-3">
+         <p className="text-sm text-muted-foreground">{t("children.medical.alertsOnly")}</p>
++        {emergencyInstructions ? (
++          <Card className="border-st-danger-border bg-st-danger-soft">
++            <CardContent className="p-4 text-st-danger-fg">
++              <div className="font-semibold">{t("children.medical.emergencyInstructions")}</div>
++              <p className="whitespace-pre-wrap">{emergencyInstructions}</p>
++            </CardContent>
++          </Card>
++        ) : null}
+         {alerts.map((alert, index) => (
+           <Card
+             key={`${alert.allergen}-${index}`}
+--- a/src/features/children/use-child-lookup.ts
++++ b/src/features/children/use-child-lookup.ts
+@@ -1,6 +1,8 @@
+ import { useMemo } from "react";
+ import { LIST_LIMIT_MAX } from "@/api";
+ import { useChildren } from "./api";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ export interface ChildLookupEntry {
+   name: string;
+@@ -21,7 +23,8 @@
+  * davomat ro'yxatida uchraydi va uning ismi ham kerak.
+  */
+ export function useChildLookup(): Map<string, ChildLookupEntry> {
+-  const { data } = useChildren({ limit: LIST_LIMIT_MAX });
++  const { can } = usePermissions();
++  const { data } = useChildren({ limit: LIST_LIMIT_MAX }, can(P.childRead));
+ 
+   return useMemo(() => {
+     const map = new Map<string, ChildLookupEntry>();
+--- a/src/features/comms/components/SendNotificationDialog.tsx
++++ b/src/features/comms/components/SendNotificationDialog.tsx
+@@ -14,7 +14,7 @@
+ import { useIdempotencyKey } from "@/lib/idempotency";
+ import { useSendNotification, useTemplates } from "../api";
+ 
+-const CHANNELS: NotificationChannel[] = ["telegram", "sms", "internal", "email"];
++const CHANNELS: NotificationChannel[] = ["telegram", "internal"];
+ 
+ /**
+  * Xabarnoma yuborish. `Idempotency-Key` majburiy (Integration Guide §8),
+--- a/src/features/comms/NotificationsPage.tsx
++++ b/src/features/comms/NotificationsPage.tsx
+@@ -28,7 +28,7 @@
+ import { useUrlState } from "@/hooks/use-url-state";
+ import { RefreshButton } from "@/components/common/RefreshButton";
+ 
+-const CHANNELS: NotificationChannel[] = ["telegram", "sms", "internal", "email"];
++const CHANNELS: NotificationChannel[] = ["telegram", "internal"];
+ const STATUSES = ["queued", "sent", "delivered", "failed"] as const;
+ 
+ function NotificationLogTab() {
+--- a/src/features/finance/api-catalog.ts
++++ b/src/features/finance/api-catalog.ts
+@@ -13,6 +13,8 @@
+   type UpdateTariffDto,
+ } from "@/api";
+ import { qk, useApiMutation } from "@/lib/query";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ /* ---------------------------------------------------------------- tariflar */
+ 
+@@ -86,7 +88,12 @@
+ /* ------------------------------------------------------------------ davrlar */
+ 
+ export function usePeriods(year?: number) {
+-  return useQuery({ queryKey: qk.periods(year), queryFn: () => periodsApi.list(year) });
++  const { can } = usePermissions();
++  return useQuery({
++    queryKey: qk.periods(year),
++    queryFn: () => periodsApi.list(year),
++    enabled: can(P.chargeRead),
++  });
+ }
+ 
+ export function useCreatePeriod() {
+--- a/src/features/finance/ChargesPage.tsx
++++ b/src/features/finance/ChargesPage.tsx
+@@ -71,6 +71,7 @@
+       <FilterBar>
+         <div className="min-w-60">
+           <ChildPicker
++            permission="charge:read"
+             label={t("charges.columns.child")}
+             value={childId}
+             onChange={(value) => {
+--- a/src/features/finance/components/DebtReminderDialog.tsx
++++ b/src/features/finance/components/DebtReminderDialog.tsx
+@@ -19,7 +19,7 @@
+ import { newIdempotencyKey } from "@/lib/idempotency";
+ import { useErrorToast } from "@/lib/query";
+ 
+-const CHANNELS: NotificationChannel[] = ["telegram", "sms", "internal", "email"];
++const CHANNELS: NotificationChannel[] = ["telegram", "internal"];
+ 
+ export interface DebtorTarget {
+   childId: string;
+--- a/src/features/finance/components/ManualChargeDialog.tsx
++++ b/src/features/finance/components/ManualChargeDialog.tsx
+@@ -55,6 +55,7 @@
+     >
+       <div className="space-y-3">
+         <ChildPicker
++          permission="charge:generate"
+           label={t("charges.manual.child")}
+           value={watch("childId")}
+           onChange={(value) => setValue("childId", value, { shouldValidate: true })}
+--- a/src/features/finance/components/PaymentFormDialog.tsx
++++ b/src/features/finance/components/PaymentFormDialog.tsx
+@@ -23,6 +23,8 @@
+ import { useCreatePayment } from "../api";
+ import { PaymentAllocations, type AllocationMap } from "./PaymentAllocations";
+ import { DateTimePicker } from "@/components/common/DateField";
++import { usePermissions } from "@/auth/auth-context";
++import { P } from "@/config/permissions";
+ 
+ const METHODS: PaymentMethod[] = ["cash", "bank", "card", "online", "other"];
+ 
+@@ -35,6 +37,7 @@
+  */
+ export function PaymentFormDialog({ childId }: { childId?: string }) {
+   const { t } = useTranslation();
++  const { can } = usePermissions();
+   const create = useCreatePayment();
+   const idempotency = useIdempotencyKey();
+   const [manual, setManual] = useState(false);
+@@ -103,13 +106,20 @@
+       <div className="space-y-3">
+         {childId ? null : (
+           <ChildPicker
++            permission="payment:create"
+             label={t("payments.form.child")}
+             value={selectedChild}
+-            onChange={(value) => setValue("childId", value, { shouldValidate: true })}
++            onChange={(value) => {
++              setValue("childId", value, { shouldValidate: true });
++              setValue("payerGuardianId", undefined);
++              setAllocations({});
++            }}
+             error={error("childId")}
+           />
+         )}
+         <GuardianPicker
++          paymentChildId={selectedChild ?? ""}
++          disabled={!selectedChild}
+           label={t("payments.form.payer")}
+           value={watch("payerGuardianId") ?? ""}
+           onChange={(value) => setValue("payerGuardianId", value)}
+@@ -150,29 +160,32 @@
+           </Field>
+         </div>
+ 
+-        <FileUploadField
+-          label={t("payments.form.attachment")}
+-          value={watch("attachmentFileId")}
+-          onChange={(fileId) => setValue("attachmentFileId", fileId)}
+-          entityType="payment"
+-        />
++        {can(P.fileManage) ? (
++          <FileUploadField
++            label={t("payments.form.attachment")}
++            value={watch("attachmentFileId")}
++            onChange={(fileId) => setValue("attachmentFileId", fileId)}
++          />
++        ) : null}
+ 
+-        <div className="space-y-2 rounded-xl border border-border p-3">
+-          <div className="flex items-center justify-between">
+-            <Label htmlFor="manual-allocation">{t("payments.form.allocationsTitle")}</Label>
+-            <Switch id="manual-allocation" checked={manual} onCheckedChange={setManual} />
++        {can(P.chargeRead) ? (
++          <div className="space-y-2 rounded-xl border border-border p-3">
++            <div className="flex items-center justify-between">
++              <Label htmlFor="manual-allocation">{t("payments.form.allocationsTitle")}</Label>
++              <Switch id="manual-allocation" checked={manual} onCheckedChange={setManual} />
++            </div>
++            {manual && selectedChild ? (
++              <PaymentAllocations
++                childId={selectedChild}
++                amountSom={watch("amountSom")}
++                allocations={allocations}
++                onChange={setAllocations}
++              />
++            ) : (
++              <p className="text-xs text-muted-foreground">{t("payments.form.allocationsHint")}</p>
++            )}
+           </div>
+-          {manual && selectedChild ? (
+-            <PaymentAllocations
+-              childId={selectedChild}
+-              amountSom={watch("amountSom")}
+-              allocations={allocations}
+-              onChange={setAllocations}
+-            />
+-          ) : (
+-            <p className="text-xs text-muted-foreground">{t("payments.form.allocationsHint")}</p>
+-          )}
+-        </div>
++        ) : null}
+ 
+         <Field label={t("payments.form.note")} error={error("note")}>
+           <Textarea rows={2} {...register("note")} />
+--- a/src/features/finance/components/RulesDialogs.tsx
++++ b/src/features/finance/components/RulesDialogs.tsx
+@@ -140,6 +140,7 @@
+     >
+       <div className="space-y-3">
+         <ChildPicker
++          permission="billing_rules:manage"
+           label={t("billing.rules.simulateChild")}
+           value={watch("childId")}
+           onChange={(value) => setValue("childId", value, { shouldValidate: true })}
+--- a/src/features/finance/components/RulesSimulatePanel.tsx
++++ b/src/features/finance/components/RulesSimulatePanel.tsx
+@@ -82,6 +82,7 @@
+       <div className="text-sm font-medium">{t("billing.rules.simulateRequired")}</div>
+ 
+       <ChildPicker
++        permission="billing_rules:manage"
+         label={t("billing.rules.simulateChild")}
+         value={childId}
+         onChange={(value) => {
+--- a/src/features/finance/PaymentsPage.tsx
++++ b/src/features/finance/PaymentsPage.tsx
+@@ -105,6 +105,7 @@
+         />
+         <div className="min-w-60">
+           <ChildPicker
++            permission="payment:read"
+             label={t("payments.columns.child")}
+             value={childId}
+             onChange={(value) => {
+--- a/src/features/groups/api.ts
++++ b/src/features/groups/api.ts
+@@ -10,6 +10,7 @@
+ } from "@/api";
+ import type { GroupListParams } from "@/api/endpoints/groups";
+ import { qk, useApiMutation } from "@/lib/query";
++import { useBootstrapLookups } from "@/auth/auth-context";
+ 
+ export function useGroups(params: GroupListParams = {}) {
+   return useQuery({
+@@ -21,8 +22,8 @@
+ 
+ /** Filtr va formalar uchun tayyor variantlar. */
+ export function useGroupOptions(): { value: string; label: string }[] {
+-  const { data } = useGroups({ limit: 200 });
+-  return (data?.data ?? []).map((group) => ({ value: group.id, label: group.name }));
++  const { data } = useBootstrapLookups();
++  return (data?.groups ?? []).map((group) => ({ value: group.id, label: group.name }));
+ }
+ 
+ export function useGroup(id: string) {
+--- a/src/features/guardians/duplicate.ts
++++ b/src/features/guardians/duplicate.ts
+@@ -10,7 +10,8 @@
+ export function duplicateGuardian(error: unknown): Guardian | null {
+   if (!isApiError(error) || error.code !== "DUPLICATE") return null;
+   const details = error.details as
+-    { existing?: Guardian; guardian?: Guardian; id?: string } | undefined;
++    | { existing?: Guardian; guardian?: Guardian; id?: string }
++    | undefined;
+   if (!details) return null;
+   if (details.existing) return details.existing;
+   if (details.guardian) return details.guardian;
+--- a/src/features/pickup/api.ts
++++ b/src/features/pickup/api.ts
+@@ -89,6 +89,10 @@
+   return useApiMutation({
+     mutationFn: (dto: TemporaryPermissionDto) => pickupApi.createTemporary(dto),
+     successMessage: t("pickup.temporary.created"),
+-    invalidate: [qk.pickupPersons(childId), qk.pickupHistory(childId)],
++    invalidate: [
++      qk.pickupPersons(childId),
++      qk.pickupHistory(childId),
++      ["pickup", "active", childId],
++    ],
+   });
+ }
+--- a/src/features/pickup/components/PickupPersonPicker.tsx
++++ b/src/features/pickup/components/PickupPersonPicker.tsx
+@@ -4,7 +4,7 @@
+ import { QueryState } from "@/components/common/QueryState";
+ import { cn, focusRing } from "@/lib/utils";
+ import { todayIso } from "@/lib/dates";
+-import { usePickupPersons } from "../api";
++import { useActivePermissions, usePickupPersons } from "../api";
+ 
+ interface PickupPersonPickerProps {
+   childId: string;
+@@ -35,15 +35,35 @@
+   const { t } = useTranslation();
+   const persons = usePickupPersons(childId);
+   const today = todayIso();
++  const permissions = useActivePermissions(childId, today);
++  const choices = [
++    ...(persons.data ?? []),
++    ...(permissions.data ?? [])
++      .filter((p) => !p.pickupPersonId)
++      .map((p) => ({
++        id: `permission:${p.id}`,
++        fullName: p.adhocFullName ?? "",
++        permissionType: p.permissionType,
++        phone: p.adhocPhone ?? undefined,
++        validTo: p.validTo ?? undefined,
++        revokedAt: p.revokedAt ?? undefined,
++        photoFileId: undefined,
++        photoUrl: undefined,
++        relationship: undefined,
++      })),
++  ];
+ 
+   return (
+     <QueryState
+-      isLoading={persons.isLoading}
+-      error={persons.error}
+-      isEmpty={(persons.data ?? []).length === 0}
++      isLoading={persons.isLoading || permissions.isLoading}
++      error={persons.error ?? permissions.error}
++      isEmpty={choices.length === 0}
+       emptyTitle={t("pickup.persons.empty")}
+       emptyDescription={t("pickup.persons.emptyHint")}
+-      onRetry={() => void persons.refetch()}
++      onRetry={() => {
++        void persons.refetch();
++        void permissions.refetch();
++      }}
+       rows={3}
+     >
+       <div
+@@ -51,7 +71,7 @@
+         aria-label={t("pickup.verify.person")}
+         className={cn("space-y-2", className)}
+       >
+-        {(persons.data ?? []).map((person) => {
++        {choices.map((person) => {
+           const selected = person.id === value;
+           const expired = Boolean(person.validTo && person.validTo < today);
+           return (
+--- a/src/features/pickup/components/PickupPersonsPanel.tsx
++++ b/src/features/pickup/components/PickupPersonsPanel.tsx
+@@ -70,7 +70,7 @@
+                 key={person.id}
+                 className="rounded-xl border border-st-ok-border bg-st-ok-soft px-3 py-1.5 text-sm text-st-ok-fg"
+               >
+-                {person.fullName}
++                {person.pickupPerson?.fullName ?? person.adhocFullName}
+                 {person.validTo ? ` · ${formatDate(person.validTo)}` : ""}
+               </span>
+             ))}
+--- a/src/features/pickup/components/PickupVerdict.tsx
++++ b/src/features/pickup/components/PickupVerdict.tsx
+@@ -80,7 +80,9 @@
+         {/* Surat — tekshiruvning o'zi, shuning uchun eng katta element. */}
+         <Avatar className="h-52 w-52 border-2 border-st-ok-border">
+           <AuthAvatarImage fileId={person?.photoFileId} src={data.photoUrl ?? person?.photoUrl} />
+-          <AvatarFallback className="text-4xl">{(person?.fullName ?? "?")[0]}</AvatarFallback>
++          <AvatarFallback className="text-4xl">
++            {(person?.fullName ?? data.pickupName ?? "?")[0]}
++          </AvatarFallback>
+         </Avatar>
+ 
+         <div className="flex w-full items-center justify-center gap-2 rounded-xl bg-st-ok-fg px-4 py-2 text-xl font-extrabold text-white">
+@@ -88,7 +90,7 @@
+           {t("pickup.verify.allowed")}
+         </div>
+ 
+-        <div className="font-medium">{person?.fullName}</div>
++        <div className="font-medium">{person?.fullName ?? data.pickupName}</div>
+         {person?.relationship ? (
+           <div className="text-sm text-muted-foreground">{person.relationship}</div>
+         ) : null}
+--- a/src/features/pickup/PickupPage.tsx
++++ b/src/features/pickup/PickupPage.tsx
+@@ -38,8 +38,10 @@
+     (`NOT_CHECKED_IN`). Lekin bu holat tanlash paytidayoq ma'lum — tugmani
+     bosib, xato kutib o'tirish shart emas (§5.2 «sabab va keyingi qadam»).
+   */
+-  const inside = useInside();
+-  const isInside = (inside.data ?? []).some((row) => row.childId === childId);
++  const canReadAttendance = can(P.attendanceRead);
++  const inside = useInside(canReadAttendance);
++  // If attendance is unavailable, checkout still validates the state on the server.
++  const isInside = !canReadAttendance || (inside.data ?? []).some((row) => row.childId === childId);
+ 
+   const flow = usePickupCheckOut(childId, { childName, enabled: Boolean(childId) });
+ 
+@@ -58,7 +60,12 @@
+             <CardTitle className="text-base">{t("pickup.verify.title")}</CardTitle>
+           </CardHeader>
+           <CardContent className="space-y-4">
+-            <ChildPicker label={t("pickup.verify.child")} value={childId} onChange={selectChild} />
++            <ChildPicker
++              permission="pickup:read"
++              label={t("pickup.verify.child")}
++              value={childId}
++              onChange={selectChild}
++            />
+ 
+             {childId ? (
+               <div className="space-y-2">
+@@ -97,7 +104,7 @@
+               holati alohida aytiladi: bu rad etish emas, tartib xatosi —
+               avval kirish qayd etilishi kerak.
+             */}
+-            {flow.allowed ? (
++            {flow.allowed && can(P.attendanceCheckOut) ? (
+               isInside ? (
+                 <div className="w-full space-y-3 pt-2">
+                   <Textarea
+--- a/src/features/pickup/use-pickup-checkout.ts
++++ b/src/features/pickup/use-pickup-checkout.ts
+@@ -5,6 +5,7 @@
+ import { errorMessage } from "@/lib/errors";
+ import { useCheckOut } from "@/features/attendance/api";
+ import { usePickupVerify } from "./api";
++import { pickupSelection } from "@/api/pickup-selection";
+ 
+ interface Options {
+   /** Tekshiruv so'rovi qachon yuborilsin (oyna ochiq bo'lganda). */
+@@ -56,8 +57,9 @@
+   };
+ 
+   const submit = () => {
++    if (verdict?.allowed !== true) return;
+     checkOut.mutate(
+-      { childId, pickupPersonId: personId, note: note.trim() || undefined },
++      { childId, ...pickupSelection(personId), note: note.trim() || undefined },
+       {
+         onSuccess: () => {
+           toast.success(t("attendance.checkedOut", { name: options.childName ?? "" }));
+--- a/src/features/settings/api.ts
++++ b/src/features/settings/api.ts
+@@ -2,7 +2,6 @@
+ import { useTranslation } from "react-i18next";
+ import {
+   settingsApi,
+-  type Branch,
+   type CreateBranchDto,
+   type CreateHolidayDto,
+   type Holiday,
+@@ -10,6 +9,7 @@
+   type UpdateSettingsDto,
+ } from "@/api";
+ import { qk, useApiMutation } from "@/lib/query";
++import { useBootstrapLookups } from "@/auth/auth-context";
+ 
+ export function useSettings() {
+   return useQuery({ queryKey: qk.settings, queryFn: () => settingsApi.get() });
+@@ -25,8 +25,8 @@
+ }
+ 
+ export function useBranchOptions(): { value: string; label: string }[] {
+-  const { data } = useBranches();
+-  return (data ?? []).map((branch: Branch) => ({ value: branch.id, label: branch.name }));
++  const { data } = useBootstrapLookups();
++  return (data?.branches ?? []).map((branch) => ({ value: branch.id, label: branch.name }));
+ }
+ 
+ export function useHolidays(params: { year?: number; branchId?: string }) {
+--- a/src/hooks/use-entity-form.ts
++++ b/src/hooks/use-entity-form.ts
+@@ -8,12 +8,12 @@
+   type UseFormReturn,
+ } from "react-hook-form";
+ import { zodResolver } from "@hookform/resolvers/zod";
+-import type { ZodType } from "zod";
++import type { ZodType, ZodTypeDef, ZodFirstPartyTypeKind } from "zod";
+ import { fieldErrors } from "@/api";
+ 
+ export interface EntityFormOptions<T extends FieldValues> {
+   /** Validatsiya sxemasi (server qoidalarini takrorlaydi). */
+-  schema: ZodType<T>;
++  schema: ZodType<T, ZodTypeDef & { typeName: ZodFirstPartyTypeKind }, T>;
+   /** Yangi yozuv uchun boshlang'ich qiymatlar. */
+   defaults: T | (() => T);
+   /** Berilsa — tahrirlash rejimi; forma shu yozuv bilan to'ldiriladi. */

@@ -7,6 +7,7 @@ import {
   Headers,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BillingRunsService } from './billing-runs.service';
@@ -19,6 +20,12 @@ import { PreviewBillingRunDto } from './dto/preview-billing-run.dto';
 @Controller('billing-runs')
 export class BillingRunsController {
   constructor(private readonly billingRuns: BillingRunsService) {}
+
+  @Get()
+  @RequirePermissions('charge:read')
+  list(@Query('periodId') periodId?: string, @Query('status') status?: string) {
+    return this.billingRuns.list(periodId, status);
+  }
 
   @ApiOperation({
     summary: 'Preview a billing run',

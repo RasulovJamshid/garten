@@ -5,7 +5,7 @@ import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { Auth } from '../common/decorators/auth.decorator';
 import { AuthContext } from '../common/auth-context';
 import { CreateTariffDto, UpdateTariffDto } from './dto/tariff.dto';
-import { AssignChildTariffDto } from './dto/child-tariff.dto';
+import { AssignChildTariffDto, EndChildTariffDto } from './dto/child-tariff.dto';
 
 @ApiTags('tariffs')
 @Controller()
@@ -60,5 +60,16 @@ export class TariffsController {
     @Body() dto: AssignChildTariffDto,
   ) {
     return this.tariffs.assignToChild(ctx, childId, dto);
+  }
+
+  @Patch('children/:childId/tariffs/:assignmentId')
+  @RequirePermissions('tariff:manage')
+  end(
+    @Auth() ctx: AuthContext,
+    @Param('childId') childId: string,
+    @Param('assignmentId') assignmentId: string,
+    @Body() dto: EndChildTariffDto,
+  ) {
+    return this.tariffs.endAssignment(ctx, childId, assignmentId, dto.effectiveTo);
   }
 }

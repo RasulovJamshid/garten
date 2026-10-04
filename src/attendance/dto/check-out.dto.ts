@@ -8,13 +8,20 @@ export class CheckOutDto {
 
   @ApiProperty({
     required: false,
-    description:
-      'Person picking up the child. Validated against pickup permissions once the pickup ' +
-      'module exists — currently recorded but not yet permission-checked (see attendance.service.ts).',
+    description: 'Authorized pickup person; provide this or pickupPermissionId.',
   })
   @IsOptional()
   @IsUUID()
   pickupPersonId?: string;
+
+  @ApiProperty({
+    required: false,
+    format: 'uuid',
+    description: 'Active permission, including ad-hoc temporary pickups',
+  })
+  @IsOptional()
+  @IsUUID()
+  pickupPermissionId?: string;
 
   @ApiProperty({ required: false, description: 'Defaults to now' })
   @IsOptional()

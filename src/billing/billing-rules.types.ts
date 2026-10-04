@@ -21,7 +21,7 @@ export type TariffKind =
 
 export interface BillingRules {
   version: number;
-  billingTiming: 'arrears' | 'advance' | 'estimate_then_trueup';
+  billingTiming: 'arrears';
 
   attendance: {
     mode: AttendanceMode;
@@ -77,6 +77,8 @@ export interface ChargeInput {
   billableDays: number; // working days ∩ enrollment window
   fixedDiscountsTiyin: bigint[];
   percentDiscountsBp: number[]; // 10% = 1000 bp
+  workingDays?: number;
+  forceFullTariff?: boolean;
 }
 
 export interface ChargeResult {

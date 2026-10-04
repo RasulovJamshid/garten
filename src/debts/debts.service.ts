@@ -45,12 +45,29 @@ function toBigInt(v: unknown): bigint {
 export class DebtsService {
   constructor(private readonly tenantPrisma: TenantPrisma) {}
 
+  private async authorizedIds() {
+    return (
+      await this.tenantPrisma.db.child.findMany({
+        where: { deletedAt: null, ...this.tenantPrisma.childWhere('debt:read') },
+        select: { id: true },
+      })
+    ).map((c) => c.id);
+  }
+
   async list(filters: { groupId?: string; overdueOnly?: boolean; minAmountTiyin?: string }) {
     const tenantId = this.tenantPrisma.tenantId;
 
-    const conditions: Prisma.Sql[] = [Prisma.sql`cb.tenant_id = ${tenantId}::uuid`];
+    const ids = await this.authorizedIds();
+    if (!ids.length) return [];
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`cb.tenant_id = ${tenantId}::uuid`,
+      Prisma.sql`cb.child_id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})`,
+    ];
     if (filters.groupId) conditions.push(Prisma.sql`ga.group_id = ${filters.groupId}::uuid`);
-    if (filters.overdueOnly) conditions.push(Prisma.sql`cb.debt_tiyin > 0`);
+    if (filters.overdueOnly)
+      conditions.push(
+        Prisma.sql`EXISTS (SELECT 1 FROM v_debt_ageing a WHERE a.tenant_id = cb.tenant_id AND a.child_id = cb.child_id AND a.total_outstanding > a.not_overdue)`,
+      );
     if (filters.minAmountTiyin) {
       conditions.push(Prisma.sql`cb.debt_tiyin >= ${BigInt(filters.minAmountTiyin)}`);
     }
@@ -60,7 +77,7 @@ export class DebtsService {
              cb.charged_tiyin, cb.paid_tiyin, cb.debt_tiyin, cb.advance_tiyin
       FROM v_child_balance cb
       JOIN child c ON c.id = cb.child_id
-      LEFT JOIN group_assignment ga ON ga.child_id = cb.child_id AND ga.effective_to IS NULL
+      LEFT JOIN group_assignment ga ON ga.child_id = cb.child_id AND ga.effective_from <= (now() AT TIME ZONE 'Asia/Tashkent')::date AND (ga.effective_to IS NULL OR ga.effective_to >= (now() AT TIME ZONE 'Asia/Tashkent')::date)
       WHERE ${Prisma.join(conditions, ' AND ')}
       ORDER BY cb.debt_tiyin DESC
     `;
@@ -77,6 +94,7 @@ export class DebtsService {
   }
 
   async forChild(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'debt:read');
     const tenantId = this.tenantPrisma.tenantId;
 
     const [balanceRows, ageingRows] = await Promise.all([
@@ -116,6 +134,9 @@ export class DebtsService {
       );
     }
 
+    const previous = await this.tenantPrisma.db.$queryRaw<
+      { amount: unknown }[]
+    >`SELECT COALESCE(SUM(outstanding_tiyin),0) AS amount FROM v_charge_outstanding WHERE tenant_id = ${tenantId}::uuid AND child_id = ${childId}::uuid AND period_id IS DISTINCT FROM ${latestCharge?.periodId ?? null}::uuid`;
     const debtTiyin = toBigInt(balance?.debt_tiyin);
     const totalOutstanding = toBigInt(ageing?.total_outstanding);
     const notOverdue = toBigInt(ageing?.not_overdue);
@@ -123,7 +144,7 @@ export class DebtsService {
     return {
       childId,
       currentChargeTiyin: currentChargeTiyin.toString(),
-      previousDebtTiyin: (debtTiyin - currentChargeTiyin).toString(),
+      previousDebtTiyin: toBigInt(previous[0]?.amount).toString(),
       totalPaidTiyin: toBigInt(balance?.paid_tiyin).toString(),
       advanceBalanceTiyin: toBigInt(balance?.advance_tiyin).toString(),
       currentDebtTiyin: debtTiyin.toString(),
@@ -138,6 +159,10 @@ export class DebtsService {
   }
 
   async summary() {
+    const ids = await this.authorizedIds();
+    const scope = ids.length
+      ? Prisma.sql`child_id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})`
+      : Prisma.sql`FALSE`;
     const tenantId = this.tenantPrisma.tenantId;
 
     const byGroup = await this.tenantPrisma.db.$queryRaw<
@@ -145,9 +170,9 @@ export class DebtsService {
     >`
       SELECT ga.group_id, g.name AS group_name, SUM(cb.debt_tiyin) AS total_debt
       FROM v_child_balance cb
-      LEFT JOIN group_assignment ga ON ga.child_id = cb.child_id AND ga.effective_to IS NULL
+      LEFT JOIN group_assignment ga ON ga.child_id = cb.child_id AND ga.effective_from <= (now() AT TIME ZONE 'Asia/Tashkent')::date AND (ga.effective_to IS NULL OR ga.effective_to >= (now() AT TIME ZONE 'Asia/Tashkent')::date)
       LEFT JOIN child_group g ON g.id = ga.group_id
-      WHERE cb.tenant_id = ${tenantId}::uuid AND cb.debt_tiyin > 0
+      WHERE cb.tenant_id = ${tenantId}::uuid AND cb.debt_tiyin > 0 AND cb.child_id IN (SELECT child_id FROM v_child_balance WHERE ${scope})
       GROUP BY ga.group_id, g.name
       ORDER BY total_debt DESC
     `;
@@ -156,7 +181,7 @@ export class DebtsService {
       { not_overdue: unknown; d1_7: unknown; d8_30: unknown; d30_plus: unknown }[]
     >`
       SELECT SUM(not_overdue) AS not_overdue, SUM(d1_7) AS d1_7, SUM(d8_30) AS d8_30, SUM(d30_plus) AS d30_plus
-      FROM v_debt_ageing WHERE tenant_id = ${tenantId}::uuid
+      FROM v_debt_ageing WHERE tenant_id = ${tenantId}::uuid AND ${scope}
     `;
 
     const totals = ageingTotals[0];

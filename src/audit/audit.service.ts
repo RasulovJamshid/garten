@@ -29,9 +29,9 @@ export interface AuditEntry {
 export class AuditService {
   constructor(private readonly tenantPrisma: TenantPrisma) {}
 
-  async log(entry: AuditEntry): Promise<void> {
+  async log(entry: AuditEntry, db: any = this.tenantPrisma.db): Promise<void> {
     const diff = computeDiff(entry.oldValue, entry.newValue);
-    await this.tenantPrisma.db.auditLog.create({
+    await db.auditLog.create({
       data: {
         // Explicit even though the tenant extension would inject it too —
         // belt and suspenders beats a silent `any` cast (tenant-extension.ts).

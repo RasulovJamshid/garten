@@ -59,17 +59,24 @@ export function forTenant(client: PrismaClient, tenantId: string) {
             a.where = { ...a.where, tenantId };
           }
 
+          if (operation === 'update' || operation === 'updateMany') {
+            a.data = { ...a.data, tenantId };
+          }
+
           if (operation === 'create') {
             a.data = { ...a.data, tenantId };
           }
 
-          if (operation === 'createMany' && Array.isArray(a.data)) {
-            a.data = a.data.map((row: Record<string, any>) => ({ ...row, tenantId }));
+          if (operation === 'createMany') {
+            a.data = (Array.isArray(a.data) ? a.data : [a.data]).map(
+              (row: Record<string, any>) => ({ ...row, tenantId }),
+            );
           }
 
           if (operation === 'upsert') {
             a.where = { ...a.where, tenantId };
             a.create = { ...a.create, tenantId };
+            a.update = { ...a.update, tenantId };
           }
 
           return query(a);

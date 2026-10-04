@@ -20,4 +20,12 @@ export class SetAttendanceStatusDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Required for corrections and historical entries; minimum 10 characters',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

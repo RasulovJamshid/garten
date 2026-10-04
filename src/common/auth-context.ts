@@ -28,6 +28,7 @@ export class AuthContext {
     public readonly branchIds: string[],
     public readonly ownGroupIds: string[],
     private readonly permissions: ReadonlyMap<string, PermissionScope>,
+    private readonly permissionBranches?: ReadonlyMap<string, string[]>,
   ) {}
 
   has(key: string): boolean {
@@ -44,13 +45,20 @@ export class AuthContext {
    * compiling to `branchId: { in: [] }`, which returns an empty page and
    * looks identical to "the kindergarten has no children".
    */
-  requireBranchIds(): string[] {
-    if (this.branchIds.length === 0) {
+  accessibleBranchIds(permission?: string): string[] {
+    return permission && this.permissionBranches
+      ? (this.permissionBranches.get(permission) ?? []).filter((id) => this.branchIds.includes(id))
+      : this.branchIds;
+  }
+
+  requireBranchIds(permission?: string): string[] {
+    const ids = this.accessibleBranchIds(permission);
+    if (ids.length === 0) {
       throw AppErrors.noScopeAssignment(
         'Your account has branch-limited access but is not attached to any branch',
       );
     }
-    return this.branchIds;
+    return ids;
   }
 
   /** Same contract as requireBranchIds(), for `own_group` scope. */

@@ -1,103 +1,94 @@
 # Kindergarten Management System — Backend
 
-Stage 1 backend API. Built against the spec in [`kindergarten-docs/`](kindergarten-docs/) — read that
-first, especially `docs/01-stage1-plan.md` (locked decisions) and `docs/06-ops-reference.md` (error
-codes, env config, ops runbooks).
+Stage 1 NestJS API for child records, attendance, authorized pickup, billing, payments, expenses,
+staff permissions, communication and reports. The original requirements are in
+[kindergarten-docs/](kindergarten-docs/).
 
-## Status: backend feature-complete, pre-launch hardening in progress
+## Current status
 
-Every domain module in the plan is implemented: auth, dynamic RBAC (including the §5.5 safety
-rails — self-lockout, last-owner, privilege-escalation, sensitive-permission gating), children,
-guardians, groups, attendance, pickup, billing, payments, debts, expenses, notifications,
-telegram, reports, imports, files/storage (local + S3/MinIO drivers), pg-boss jobs, audit log,
-dashboard, admin, users, roles. Lint, type-check, build, unit tests, and e2e tests are all green
-(`npm test`, `npm run test:e2e`).
+The October audit defects have been corrected locally. See
+[the correction and validation record](docs/project-fixes-2026-10-03.md) for the changes,
+regression coverage, deployment migration and remaining verification limits. The
+[original audit](docs/project-audit-2026-10-03.md) is historical evidence.
 
-What's genuinely outstanding before this is a finished product, not just an API:
+The maintained tests cover tenant boundaries, permission delegation, session rotation,
+billing history and policy, payment/billing concurrency, ledger audit rollback, attendance,
+pickup, exports and notification retries. Use an isolated database for all integration tests:
+they create synthetic records and some fixtures remain because ledger rows are append-only.
+A passing source build does not establish production deployment or external Telegram delivery.
 
-- **No frontend yet.** This repo is backend-only. The client UI is a separate repo, deployed to
-  `alishaxkids.uz` on the same VPS while this API serves `api.alishaxkids.uz` — see
-  [`DEPLOYMENT.md`](DEPLOYMENT.md) §8 for how the two are wired together, and
-  `docs/frontend-functional-spec.md` / `docs/frontend-integration-guide.md` for what a frontend
-  build against this API needs to cover (also packaged as `frontend-developer-handoff.zip` for
-  handing to whoever builds it).
-- **Finance-path test coverage is thinner than `01-stage1-plan.md` §7 calls "non-negotiable."**
-  Billing math has unit tests (`src/billing/*.spec.ts`); still missing: a tenant-isolation test
-  (two seeded tenants, assert zero cross-tenant leakage), concurrent billing-run and
-  concurrent-payment-allocation race tests, self-lockout/last-owner/privilege-escalation e2e
-  coverage, period-close rejection, discount stacking, and proration. Do not treat the finance
-  path as fully proven until these exist.
-- **DB privilege separation** (`06-ops-reference.md` §3: runtime user restricted to
-  `SELECT/INSERT`-only on ledger tables, migrations run as a separate more-privileged role) isn't
-  implemented yet — see `DEPLOYMENT.md` §7 for the exact gap.
+The web application lives in [AzizBokhidjonov/alishax](https://github.com/AzizBokhidjonov/alishax).
+This repository provides its SSR build recipe, deployment watcher and versioned contract patches.
+The inspected local web checkout is from 9 September 2026; the current remote and deployed
+application were not inspected. The Flutter application is an initial staff companion;
+its documented exclusions are in [mobile/README.md](mobile/README.md).
 
-## Production deployment
+The nullable branch assignment key in user_role was corrected by the July migration. Apply
+all migrations before seeding. Production database privilege separation remains an operational
+hardening task documented in [DEPLOYMENT.md](DEPLOYMENT.md#7-known-deviation-from-the-ops-doc).
 
-`DEPLOYMENT.md` has the full VPS-to-CI/CD walkthrough: `docker-compose.prod.yml` (api + postgres
-+ minio + Caddy with automatic TLS + a nightly-backup sidecar) and the GitHub Actions `deploy`
-job in `.github/workflows/ci.yml` that builds, publishes to GHCR, and SSH-deploys on every push
-to `main`.
+## Frontend handoff and deployment
 
-## Known issue inherited from the delivered schema
+Start with the [Frontend Developer Handbook](docs/FRONTEND-DEVELOPER-HANDBOOK.md) and
+[current correction record](docs/project-fixes-2026-10-03.md). Generate client contracts from
+[openapi.json](openapi.json). Dated September reviews are historical and may describe behavior
+that subsequent fixes changed.
 
-`user_role.branch_id` is documented as "NULL = all branches" and has a partial unique index for
-that case (`uq_user_role_allbranch`), but `branch_id` is also part of the composite primary key
-`(user_id, role_id, branch_id)` — Postgres silently forces every primary-key column `NOT NULL`, so
-the NULL case can never actually occur. Harmless for Stage 1 (single branch, so "this branch" and
-"all branches" are the same set) but will need a migration fix — drop `branch_id` from the PK,
-rely on the two partial unique indexes instead — before a second branch exists. See the comment in
-`prisma/seed.ts`.
-
-Also: the schema's own README claims 49 tables / 14 triggers; the DDL as delivered actually
-produces 52 tables (confirmed by direct introspection) and 28 rows in
-`information_schema.triggers` (multi-event triggers count once per event in that view, so this is
-likely just 14 actual `CREATE TRIGGER` statements counted differently — not investigated further).
-Neither discrepancy blocked anything; noting it in case it matters later.
+[DEPLOYMENT.md](DEPLOYMENT.md) covers PostgreSQL, storage, Caddy, backend CI deployment and the
+frontend watcher. The watcher applies patches before building its archived upstream checkout
+and fails before replacement if those patches no longer match.
 
 ## Local development
 
 ```bash
-docker compose up -d postgres minio       # Postgres on 5433, MinIO on 9000/9001
-cp .env.example .env                      # then edit JWT_SECRET etc. for anything beyond local dev
+docker compose up -d postgres minio
+cp .env.example .env
 npm install
-npx prisma generate
-npm run seed                              # creates the demo tenant + owner login
+npm run prisma:migrate:deploy
+npm run seed
 npm run start:dev
-npm run seed:demo                         # optional — realistic fake data, see below
+npm run seed:demo
 ```
 
-API listens on `http://localhost:3010/api/v1` (port/prefix from `.env`). Swagger UI at
-`http://localhost:3010/docs`.
+Set JWT_SECRET and other configuration in .env. PostgreSQL uses port 5433 and the API normally
+uses http://localhost:3010/api/v1; Swagger is at http://localhost:3010/docs.
+The optional demo seed drives the running HTTP API and refuses NODE_ENV=production.
+Default development owner: owner@demo.local / ChangeMe12345!; override the seed settings
+before creating a real installation.
 
-`npm run seed:demo` (run after `start:dev` — it drives the real HTTP API, so the server must
-already be up) fills in groups, staff, ~15 children with guardians, tariffs, a month of
-attendance history, a committed billing run, and payments (a few deliberately partial or missing,
-to produce real debts) — useful for demoing the system or developing the frontend against
-realistic data. It refuses to run with `NODE_ENV=production`, since it creates fake children and
-guardians that must never land in a real tenant.
+## Verification
 
-Seed prints the owner login — default `owner@demo.local` / `ChangeMe12345!` (override via
-`SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` in `.env` before seeding).
+```bash
+npx eslint "{src,test}/**/*.ts"
+npx tsc --noEmit -p tsconfig.json
+npm test -- --runInBand
+npm run build
+npm run openapi
+python -m unittest discover -s test/deployment -v
+```
 
-### Ports
+For integration checks, configure DATABASE_URL to an isolated local PostgreSQL database,
+set NODE_ENV=test, apply migrations and run the seed first. Telegram must remain disabled.
+Then run npm run test:e2e serially. The real-worker check runs after a build:
 
-Local Postgres is mapped to **5433** (not 5432) and MinIO/API ports were chosen to avoid clashing
-with other projects already running on this machine — check `docker-compose.yml` / `.env.example`
-if you move to a machine without that conflict and want the conventional ports back.
+```bash
+TEST_DATABASE_ISOLATED=true NODE_ENV=test TELEGRAM_ENABLED=false node test/runtime/worker-smoke.cjs
+```
 
-## Conventions worth knowing before adding a module
+That script checks real pg-boss processing, internal notifications, XLSX/PDF exports, local
+storage, authenticated downloads and expiry. TEST_DATABASE_ISOLATED is an explicit declaration
+that the database contains test data; the script also restricts connections to localhost.
+Windows can run the portable patch tests; deployment shell tests require POSIX and run in CI.
 
-- Inject `TenantPrisma`, never `PrismaService`. ESLint enforces this outside the exempted dirs.
-- Money is `BigInt` tiyin everywhere; never a float. The `BigInt.prototype.toJSON` polyfill in
-  `src/common/bigint-json.polyfill.ts` handles JSON serialization — don't add manual `.toString()`
-  calls for it.
-- Every domain error is an `AppException` from `src/common/exceptions/app.exception.ts` (the
-  `AppErrors` factory), not a bare `HttpException` — that's what keeps `code` stable for clients to
-  localize from.
-- Guard a new endpoint with `@RequirePermissions('some:key')`; add the key to
-  `PERMISSION_CATALOG` first (code owns what exists, data owns who has it).
-- Scope a list/read query with `ScopeService.apply(ctx, 'some:key', where, { ...fieldNames })`
-  rather than hand-rolling the branch/own_group filter.
-- RBAC infrastructure (`src/rbac/`) is a deliberate exception to the "always request-scoped"
-  instinct — see the comment in `permission-resolver.service.ts` for why guards specifically should
-  stay singletons here.
+## Development conventions
+
+- Inject TenantPrisma in domain services. ESLint restricts raw PrismaService access to infrastructure.
+- Money uses BigInt tiyin and serializes to decimal strings through the shared JSON polyfill.
+- Return AppErrors domain errors so clients can rely on stable error codes.
+- Add permissions to PERMISSION_CATALOG and guard endpoints with @RequirePermissions.
+- Combine TenantPrisma.childWhere()/branchWhere() with request filters using AND. Use each
+  operation's own permission when resolving its target.
+- Keep transactional financial writes and audit events in the same transaction.
+- Root TypeScript covers backend, tests, scripts and seeds. data/ and mobile/ have separate
+  ownership; historical output and local databases must stay outside backend compilation and
+  image contexts.

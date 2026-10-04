@@ -1,3 +1,4 @@
+import { effectiveOn } from '../common/tashkent-date';
 import { Injectable } from '@nestjs/common';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuditService } from '../audit/audit.service';
@@ -32,6 +33,13 @@ export class AnnouncementsService {
   }
 
   async create(ctx: AuthContext, dto: CreateAnnouncementDto) {
+    if (dto.branchId) await this.tenantPrisma.assertBranch(dto.branchId, 'announcement:manage');
+    if (dto.fileIds?.length)
+      throw AppErrors.validationFailed(
+        'Announcement attachments are not supported by the current delivery provider',
+      );
+    if (dto.expiresAt && new Date(dto.expiresAt) <= new Date(dto.publishAt ?? Date.now()))
+      throw AppErrors.validationFailed('expiresAt must be later than publishAt');
     const announcement = await this.tenantPrisma.db.announcement.create({
       data: {
         tenantId: this.tenantPrisma.tenantId,
@@ -80,6 +88,8 @@ export class AnnouncementsService {
    */
   async publish(ctx: AuthContext, id: string) {
     const announcement = await this.get(id);
+    if (announcement.expiresAt && announcement.expiresAt <= new Date())
+      throw AppErrors.conflict('ANNOUNCEMENT_EXPIRED');
     if (announcement.publishedAt) {
       throw AppErrors.conflict('Announcement already published');
     }
@@ -104,6 +114,7 @@ export class AnnouncementsService {
       await this.notifications.enqueueDeduped({
         templateKey: ANNOUNCEMENT_TEMPLATE_KEY,
         announcementId: announcement.id,
+        startAfter: announcement.publishAt ?? undefined,
         recipientGuardianId: guardianId,
         channel: 'telegram',
         language,
@@ -118,6 +129,37 @@ export class AnnouncementsService {
       queued++;
     }
 
+    if (announcement.audienceType === 'staff') {
+      const staff = await this.tenantPrisma.db.appUser.findMany({
+        where: {
+          status: 'active',
+          deletedAt: null,
+          ...(announcement.audienceIds.length ? { id: { in: announcement.audienceIds } } : {}),
+          ...(announcement.branchId
+            ? { userBranch: { some: { branchId: announcement.branchId } } }
+            : {}),
+        },
+        select: { id: true, language: true },
+      });
+      for (const user of staff) {
+        await this.notifications.enqueueDeduped({
+          templateKey: ANNOUNCEMENT_TEMPLATE_KEY,
+          announcementId: announcement.id,
+          recipientUserId: user.id,
+          channel: 'telegram',
+          language: user.language,
+          renderedBody: rendered,
+          payload: { title: announcement.title },
+          dedupKey: NotificationsService.computeDedupKey(
+            ANNOUNCEMENT_TEMPLATE_KEY,
+            user.id,
+            announcement.id,
+          ),
+          startAfter: announcement.publishAt ?? undefined,
+        });
+        queued++;
+      }
+    }
     const updated = await this.tenantPrisma.db.announcement.update({
       where: { id },
       data: { publishedAt: new Date() },
@@ -153,7 +195,7 @@ export class AnnouncementsService {
 
       case 'group': {
         const assignments = await this.tenantPrisma.db.groupAssignment.findMany({
-          where: { groupId: { in: announcement.audienceIds }, effectiveTo: null },
+          where: { groupId: { in: announcement.audienceIds }, ...effectiveOn() },
           select: { childId: true },
         });
         const links = await this.tenantPrisma.db.childGuardian.findMany({

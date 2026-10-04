@@ -1,5 +1,7 @@
 # Frontend Functional & API Specification — Kindergarten Management System
 
+> **Current contract:** Read [the October correction record](project-fixes-2026-10-03.md), [the backend handoff](backend-handoff-2026-09-11.md), and the current `openapi.json`. They supersede conflicting historical examples below.
+
 The module-by-module reference for building the UI: **what each screen does, which endpoints
 back it, what the responses look like, the business rules the UI must honor, and who is allowed
 to see it.** Read this together with the [Integration Guide](frontend-integration-guide.md),

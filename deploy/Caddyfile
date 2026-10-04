@@ -3,7 +3,7 @@
 #
 # Two public hostnames, one server, one Caddy:
 #
-#   {$UI_DOMAIN}   e.g. alishaxkids.uz      -> web:80    (static SPA, separate repo)
+#   {$UI_DOMAIN}   e.g. alishaxkids.uz      -> web:3000  (TanStack Start SSR, separate repo)
 #   {$API_DOMAIN}  e.g. api.alishaxkids.uz  -> api:3000  (this repo)
 #
 # Both are substituted from the environment Caddy is started with
@@ -21,17 +21,17 @@
 }
 
 # --- client UI --------------------------------------------------------
-# The SPA history fallback (serve /index.html for unknown paths) belongs
-# to the `web` image, not to this proxy — Caddy here only forwards. If the
-# root loads but deep links 404, that fallback is missing inside the web
-# container.
-#
-# Serves 502 until a `web` image exists and its compose profile is enabled
-# (see docker-compose.prod.yml). {$API_DOMAIN} is unaffected by that.
+# The web container serves SSR pages and assets, including deep links.
+# The API route also supports frontend clients configured for same-origin calls.
 {$UI_DOMAIN} {
 	encode gzip
 
-	reverse_proxy web:80
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 
 	log {
 		output stdout

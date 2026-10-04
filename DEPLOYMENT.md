@@ -9,12 +9,12 @@ Two hostnames, one server, one Caddy:
 
 | Hostname | Serves | Container |
 |---|---|---|
-| `alishaxkids.uz` | client UI (static SPA) | `web:80` — built and published from its **own repo** |
+| `alishaxkids.uz` | client UI (TanStack Start SSR) | `web:3000` — built from **AzizBokhidjonov/alishax** |
 | `api.alishaxkids.uz` | this backend API | `api:3000` |
 
-The `web` service sits behind a Compose profile and stays off until that image exists (§8), so
-everything below deploys the API alone — `alishaxkids.uz` returns 502 until then, which does not
-affect the API host.
+The `web` service uses a Compose profile. Install the frontend watcher in §8 after
+the API is running; it builds the supplied repository and starts the UI. Until then,
+the UI hostname returns 502 and the API hostname continues to work.
 
 ---
 
@@ -219,53 +219,122 @@ means a second `MIGRATE_DATABASE_URL` (superuser or owner role) used only by the
 deploy` step, and revoking `UPDATE`/`DELETE` from `kg_app` on the four ledger tables. Worth doing
 before this handles real money at scale; not done as part of this pass.
 
-## 8. Adding the client UI (`alishaxkids.uz`)
+## 8. Alishax frontend and automatic updates
 
-The frontend lives in its own repository and is deployed as a published image, not built here.
-This repo owns only the routing and the Compose entry for it.
+The frontend source is [AzizBokhidjonov/alishax](https://github.com/AzizBokhidjonov/alishax),
+branch `main`. It uses **TanStack Start + Nitro SSR**, so it must run as a Node server;
+serving its output as a static SPA is insufficient. The backend repository owns its Docker
+recipe, routing and update timer. The frontend team continues working in its own repository.
 
-**What the frontend repo must produce:** an image that serves the built static bundle on port 80
-and does its own SPA history fallback (unknown paths → `index.html`). Caddy here only forwards;
-if the root page loads but deep links 404, that fallback is missing inside the web image, not in
-`deploy/Caddyfile`.
+Copy the updated `docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/frontend/`,
+`scripts/deploy-frontend.sh`, `scripts/install-frontend-watcher.sh`,
+`scripts/install-frontend-cron.sh` and
+`.env.frontend.example` into the existing server checkout. These files can be deployed
+without shipping backend source changes or applying database migrations.
 
-**The API base URL is baked in at build time.** A Vite bundle is static files — there is no
-runtime env to read — so the frontend's CI must build with:
+Prerequisites: Docker Engine with Compose v2 (including `up --wait`), Git, Bash,
+Python 3, util-linux (`flock` and `logger`), a running cron daemon with `crontab`
+available to the deploy user, and outbound HTTPS to GitHub,
+the package registry and Docker Hub. The deploy user must be able to run Docker and
+write the app's `data/` directory. The initial build needs spare RAM and disk space.
 
-```
-VITE_API_URL=https://api.alishaxkids.uz
-```
-
-An image built against a different value cannot be repointed by editing `.env.production`; it has
-to be rebuilt. Same for any other `VITE_*` value.
-
-**Turning it on**, once the frontend repo has pushed its first image to GHCR:
+From that checkout on the server:
 
 ```bash
-# in .env.production, uncomment and set:
-#   WEB_IMAGE=ghcr.io/<owner>/<web-repo>:latest
-
-docker compose -f docker-compose.prod.yml --env-file .env.production --profile web pull web
-docker compose -f docker-compose.prod.yml --env-file .env.production --profile web up -d
+# Run as the existing non-root deploy user.
+mkdir -p data
+cp .env.frontend.example .env.frontend
+# Set WEB_IMAGE=alishax-web:prod in .env.production if an old image was configured.
+# Confirm API_DOMAIN, UI_DOMAIN, API_PREFIX, CORS_ORIGINS and APP_URL are correct.
+bash scripts/install-frontend-watcher.sh
 ```
 
-The `--profile web` flag is required on **every** compose command that should include the UI —
-without it the `web` service is skipped entirely. That is deliberate: it means a missing or
-unpullable web image can never take the API down with it. If you'd rather not repeat the flag,
-export `COMPOSE_PROFILES=web` in the deploy user's shell profile.
+The installer builds and health-checks the frontend, starts `web`, recreates Caddy to
+load its new route and environment, and adds a marked job to the deploy user's crontab.
+It preserves unrelated scheduled jobs and requires no sudo. Every two minutes it checks
+GitHub for a new commit. A change to the Docker recipe, contract patches or public build settings also
+triggers a rebuild. The deployment lock prevents overlapping runs.
+No webhook port, GitHub write access or GitHub Actions deploy secrets are needed for this
+public frontend repository. Backend image deployment remains in its existing CI workflow.
 
-**CD for the UI** belongs in the frontend repo's own workflow: build → push to GHCR → SSH to this
-server → the two commands above. It should *not* be bolted onto this repo's `deploy` job — the
-two deploy on different cadences, and coupling them means a frontend typo blocks an API hotfix.
+For servers where a system timer is preferred and sudo is available, run
+`sudo bash scripts/install-frontend-watcher.sh deploy` instead. This installs
+`alishax-frontend.timer`, which waits two minutes after each run plus up to 15 seconds
+of jitter. It additionally requires systemd and `runuser`. Use one scheduler only.
 
-**Cross-origin checklist**, if the UI loads but calls fail:
+The updater archives the exact fetched commit, applies the versioned patches in
+`deploy/frontend/patches/` with `scripts/apply-frontend-patches.py`, builds an image, checks an
+isolated container, then replaces only `web`. Patches are checked before any source is changed.
+A source mismatch fails the update and preserves the running site; reconcile the patch with
+upstream before retrying. An already applied patch is accepted. Patch and helper changes are
+included in the build fingerprint, so they trigger a rebuild even without an upstream commit. Build failures leave the running site intact. A failed Compose
+startup restores the previous image when one exists. Successful revisions are recorded in
+`data/frontend-deploy/revision`. Images are retained for rollback; monitor disk usage and
+remove obsolete images deliberately. A single web container can have a brief interruption
+while it is replaced. Health checks cover SSR startup; they do not certify every business flow.
 
-| Symptom | Cause |
-|---|---|
-| Preflight fails / "not allowed by CORS" | `CORS_ORIGINS` isn't exactly `https://alishaxkids.uz` (scheme and no trailing slash both matter) |
-| 401 from `POST /auth/refresh`, login "forgets" | the client isn't sending `credentials: 'include'` |
-| Telegram webhook never fires | `APP_URL` points at the UI host instead of `api.alishaxkids.uz` |
-| `alishaxkids.uz` returns 502 | `web` isn't running — missing `--profile web` or `WEB_IMAGE` unset |
+The initial upstream `bun.lock` is out of sync with `package.json`. The Docker build uses
+Bun 1.3.10 to reconcile it while retaining existing locked resolutions. Dependency resolution
+is not fully frozen until the frontend team commits an updated lockfile. A bad future commit
+fails deployment and is retried on subsequent timer runs.
+
+### URLs and sessions
+
+The correct build setting is `VITE_API_BASE_URL=https://api.alishaxkids.uz/api/v1`
+(**including the API prefix**), not `VITE_API_URL`. By default the script derives this from
+`API_DOMAIN` and `API_PREFIX` in the server's Compose configuration. Public overrides live
+in `.env.frontend`; they are compiled into the frontend and must never contain secrets.
+The SSR runtime gets no backend database, JWT or storage credentials.
+
+Keep `CORS_ORIGINS=https://alishaxkids.uz` and `APP_URL=https://api.alishaxkids.uz` in
+`.env.production`. The frontend already sends `credentials: 'include'`; the HTTPS sibling
+domains allow the backend's `kg_refresh` cookie with `SameSite=Lax`. Caddy also forwards
+`https://alishaxkids.uz/api/*` directly to the API without removing the prefix. An absolute
+API URL is used for builds because server-side fetch cannot resolve a browser-relative URL.
+
+For a published CMS landing page, set `LANDING_DEFAULT_TENANT_CODE` on the backend, or
+`FRONTEND_LANDING_TENANT_CODE` in `.env.frontend`. The frontend shows its built-in landing
+content when no CMS page is published.
+
+### Verify and operate
+
+```bash
+curl -fsS https://alishaxkids.uz/ >/dev/null
+curl -fsS https://alishaxkids.uz/kirish >/dev/null
+curl -fsS https://alishaxkids.uz/api/v1/health
+curl -fsS https://api.alishaxkids.uz/api/v1/health
+crontab -l
+journalctl -t alishax-frontend -n 100 --no-pager # where journal access is permitted
+cat data/frontend-deploy/revision
+cat data/frontend-deploy/last-successful-check # UTC time and verified frontend commit
+
+# Immediate check / deploy:
+bash scripts/deploy-frontend.sh
+# Pause scheduled updates: remove only the marked alishax-frontend block.
+crontab -e
+```
+
+Also log in through `/kirish`, reload a protected page and verify session refresh in the
+browser. Missing credentials or tenant data cannot be checked by a container health probe.
+
+For the optional system timer, use `systemctl list-timers alishax-frontend.timer`,
+`journalctl -u alishax-frontend.service`, and `sudo systemctl start alishax-frontend.service`
+instead of the cron commands above.
+
+To restore the previous image manually, first pause the scheduler and wait for an
+active deployment to finish. With cron, remove its marked block using `crontab -e`.
+With the optional system timer, stop its timer and service. Then:
+
+```bash
+flock data/frontend-deploy/deploy.lock -c 'echo "No deployment is running"'
+# Use your WEB_IMAGE value if it differs from the default.
+docker tag "$(cat data/frontend-deploy/previous-image)" alishax-web:prod
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile web \
+  up -d --no-deps --pull never --wait web
+```
+
+Keep updates paused until the frontend commit is fixed or reverted; installing the watcher again
+reconciles the site to the current `main` branch.
 
 ## 9. Realistic demo data on production, without touching the real tenant
 

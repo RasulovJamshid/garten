@@ -16,6 +16,11 @@ export class PeriodsService {
     return this.tenantPrisma.db.accountingPeriod.findMany({
       where: year ? { year } : {},
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      include: {
+        billingRun: {
+          select: { id: true, status: true, createdAt: true, committedAt: true },
+        },
+      },
     });
   }
 

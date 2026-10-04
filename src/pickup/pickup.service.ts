@@ -19,7 +19,8 @@ export class PickupService {
     private readonly audit: AuditService,
   ) {}
 
-  personsOf(childId: string) {
+  async personsOf(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'pickup:read');
     return this.tenantPrisma.db.pickupPerson.findMany({
       where: { childId, revokedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -28,6 +29,8 @@ export class PickupService {
 
   /** Creating a pickup person also grants the accompanying permission in one call (api-spec §8). */
   async createPerson(ctx: AuthContext, childId: string, dto: CreatePickupPersonDto) {
+    await this.tenantPrisma.assertChild(childId, 'pickup:manage');
+    await this.assertGrant(childId, dto.grantedByGuardianId, dto.validFrom, dto.validTo);
     const child = await this.tenantPrisma.db.child.findUnique({ where: { id: childId } });
     if (!child) throw AppErrors.notFound('Child not found');
 
@@ -78,6 +81,7 @@ export class PickupService {
   async updatePerson(ctx: AuthContext, id: string, dto: UpdatePickupPersonDto) {
     const person = await this.tenantPrisma.db.pickupPerson.findUnique({ where: { id } });
     if (!person) throw AppErrors.notFound('Pickup person not found');
+    await this.tenantPrisma.assertChild(person.childId, 'pickup:manage');
 
     const updated = await this.tenantPrisma.db.pickupPerson.update({ where: { id }, data: dto });
 
@@ -93,26 +97,13 @@ export class PickupService {
   }
 
   async removePerson(ctx: AuthContext, id: string) {
-    const person = await this.tenantPrisma.db.pickupPerson.findUnique({ where: { id } });
-    if (!person) throw AppErrors.notFound('Pickup person not found');
-
-    // Cascades to pickup_permission (ON DELETE CASCADE) — audit the fact
-    // before the row (and its history) is gone.
-    await this.audit.log({
-      userId: ctx.userId,
-      action: 'pickup.person_revoke',
-      entityType: 'pickup_person',
-      entityId: id,
-      oldValue: { fullName: person.fullName },
-      newValue: { deleted: true },
-    });
-
-    await this.tenantPrisma.db.pickupPerson.delete({ where: { id } });
+    return this.revokePerson(ctx, id, 'Removed by staff');
   }
 
   async revokePerson(ctx: AuthContext, id: string, reason: string) {
     const person = await this.tenantPrisma.db.pickupPerson.findUnique({ where: { id } });
     if (!person) throw AppErrors.notFound('Pickup person not found');
+    await this.tenantPrisma.assertChild(person.childId, 'pickup:manage');
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
       await tx.pickupPerson.update({
@@ -135,6 +126,7 @@ export class PickupService {
   }
 
   async activePermissions(childId: string, date?: string) {
+    await this.tenantPrisma.assertChild(childId, 'pickup:read');
     const d = dateOnly(date ?? todayInTashkent());
     return this.tenantPrisma.db.pickupPermission.findMany({
       where: {
@@ -149,6 +141,16 @@ export class PickupService {
   }
 
   async createTemporary(ctx: AuthContext, dto: TemporaryPermissionDto) {
+    await this.tenantPrisma.assertChild(dto.childId, 'pickup:temporary');
+    await this.assertGrant(dto.childId, dto.grantedByGuardianId, dto.validFrom, dto.validTo);
+    if (
+      dto.pickupPersonId &&
+      !(await this.tenantPrisma.db.pickupPerson.findFirst({
+        where: { id: dto.pickupPersonId, childId: dto.childId, revokedAt: null },
+      }))
+    ) {
+      throw AppErrors.notFound('Pickup person not found for this child');
+    }
     if (!dto.pickupPersonId && !dto.fullName) {
       throw AppErrors.validationFailed('Either pickupPersonId or fullName (ad-hoc) is required');
     }
@@ -189,6 +191,7 @@ export class PickupService {
   }
 
   async history(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'pickup:read');
     return this.tenantPrisma.db.pickupPermission.findMany({
       where: { childId },
       include: { pickupPerson: true },
@@ -202,67 +205,62 @@ export class PickupService {
    * child currently checked in. All-or-nothing boolean, not a data leak —
    * an unauthenticated attempt learns only `allowed: false`.
    */
-  async verify(childId: string, pickupPersonId: string) {
-    const person = await this.tenantPrisma.db.pickupPerson.findFirst({
-      where: { id: pickupPersonId, childId },
-    });
-    if (!person || person.revokedAt) {
-      return {
-        allowed: false,
-        reason: 'PICKUP_NOT_AUTHORIZED',
-        person: null,
-        photoUrl: null,
-        expiresAt: null,
-      };
-    }
-
+  async verify(childId: string, pickupPersonId?: string, pickupPermissionId?: string) {
+    await this.tenantPrisma.assertChild(childId, 'pickup:read');
+    if (!pickupPersonId && !pickupPermissionId)
+      throw AppErrors.validationFailed('Provide pickupPersonId or pickupPermissionId');
     const today = dateOnly(todayInTashkent());
     const permission = await this.tenantPrisma.db.pickupPermission.findFirst({
       where: {
         childId,
-        pickupPersonId,
+        ...(pickupPersonId ? { pickupPersonId } : {}),
+        ...(pickupPermissionId ? { id: pickupPermissionId } : {}),
         revokedAt: null,
         validFrom: { lte: today },
         OR: [{ validTo: null }, { validTo: { gte: today } }],
       },
+      include: { pickupPerson: true },
       orderBy: { createdAt: 'desc' },
     });
-    if (!permission) {
+    const person = permission?.pickupPerson ?? null;
+    if (!permission || person?.revokedAt)
       return {
         allowed: false,
-        reason: 'PERMISSION_EXPIRED',
-        person,
+        reason: 'PICKUP_NOT_AUTHORIZED',
+        person: null,
+        permissionId: null,
+        pickupName: null,
         photoUrl: null,
         expiresAt: null,
       };
-    }
-
-    const attendanceDate = todayInTashkent();
-    const attendance = await this.tenantPrisma.db.attendanceDay.findUnique({
-      where: {
-        tenantId_childId_attendanceDate: {
-          tenantId: person.tenantId,
-          childId,
-          attendanceDate: dateOnly(attendanceDate),
-        },
-      },
+    const attendance = await this.tenantPrisma.db.attendanceDay.findFirst({
+      where: { childId, attendanceDate: today },
     });
-    if (!attendance?.checkInAt || attendance.checkOutAt) {
-      return {
-        allowed: false,
-        reason: 'NOT_CHECKED_IN',
-        person,
-        photoUrl: null,
-        expiresAt: permission.validTo,
-      };
-    }
-
+    const inside = Boolean(attendance?.checkInAt && !attendance.checkOutAt);
     return {
-      allowed: true,
-      reason: null,
+      allowed: inside,
+      reason: inside ? null : 'NOT_CHECKED_IN',
       person,
-      photoUrl: person.photoFileId ? `/files/${person.photoFileId}` : null,
+      permissionId: permission.id,
+      pickupName: person?.fullName ?? permission.adhocFullName,
+      photoUrl: person?.photoFileId ? '/files/' + person.photoFileId : null,
       expiresAt: permission.validTo,
     };
+  }
+
+  private async assertGrant(
+    childId: string,
+    guardianId: string | undefined,
+    from: string,
+    to?: string,
+  ) {
+    if (to && new Date(to) < new Date(from))
+      throw AppErrors.validationFailed('validTo must not precede validFrom');
+    if (
+      guardianId &&
+      !(await this.tenantPrisma.db.childGuardian.findFirst({ where: { childId, guardianId } }))
+    ) {
+      throw AppErrors.notFound('Granting guardian is not linked to this child');
+    }
   }
 }

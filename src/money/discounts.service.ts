@@ -16,7 +16,8 @@ export class DiscountsService {
     private readonly audit: AuditService,
   ) {}
 
-  listForChild(childId: string) {
+  async listForChild(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'discount:manage');
     return this.tenantPrisma.db.discount.findMany({
       where: { childId },
       orderBy: { createdAt: 'desc' },
@@ -24,8 +25,9 @@ export class DiscountsService {
   }
 
   async create(ctx: AuthContext, childId: string, dto: CreateDiscountDto) {
-    const child = await this.tenantPrisma.db.child.findUnique({ where: { id: childId } });
-    if (!child) throw AppErrors.notFound('Child not found');
+    await this.tenantPrisma.assertChild(childId, 'discount:manage');
+    if (dto.validTo && dto.validTo < dto.validFrom)
+      throw AppErrors.validationFailed('validTo must not precede validFrom');
 
     let parsed: { valueTiyin?: bigint; valueBp?: number };
     try {
@@ -67,6 +69,7 @@ export class DiscountsService {
   async revoke(ctx: AuthContext, id: string) {
     const discount = await this.tenantPrisma.db.discount.findUnique({ where: { id } });
     if (!discount) throw AppErrors.notFound('Discount not found');
+    await this.tenantPrisma.assertChild(discount.childId, 'discount:manage');
 
     const updated = await this.tenantPrisma.db.discount.update({
       where: { id },

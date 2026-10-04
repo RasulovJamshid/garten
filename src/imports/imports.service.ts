@@ -141,50 +141,60 @@ export class ImportsService {
   }
 
   async commit(ctx: AuthContext, importJobId: string, skipInvalid: boolean) {
-    const job = await this.get(importJobId);
-    if (job.status !== 'validated') {
-      throw AppErrors.conflict(`Import job status is "${job.status}", expected "validated"`);
-    }
-
-    const fileRow = job.fileId
-      ? await this.tenantPrisma.db.file.findFirst({ where: { id: job.fileId } })
-      : null;
-    if (!fileRow) throw AppErrors.notFound('Source file for this import job is missing');
-    const stream = await this.storage.getStream(fileRow.objectKey);
-    const buffer = await streamToBuffer(stream);
-
-    const { parsed, errors: parseErrors } = await this.parseAndValidate(job.entity, buffer);
-
-    if (parseErrors.length > 0 && !skipInvalid) {
-      throw AppErrors.validationFailed(
-        `${parseErrors.length} row(s) still fail validation — pass skipInvalid:true to commit the rest, or fix and re-validate`,
-      );
-    }
-
-    const commitErrors: RowError[] = [...parseErrors];
-    let committed = 0;
-
-    for (const { row, data } of parsed) {
-      try {
-        await this.commitRow(ctx, job.entity, data);
-        committed++;
-      } catch (e) {
-        commitErrors.push({ row, errors: [(e as Error).message] });
+    return this.tenantPrisma.transaction(async () => {
+      await this.tenantPrisma.db
+        .$queryRaw`SELECT id FROM import_job WHERE id = ${importJobId}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+      const job = await this.get(importJobId);
+      if (job.status === 'completed') return job;
+      if (job.status !== 'validated') {
+        throw AppErrors.conflict(`Import job status is "${job.status}", expected "validated"`);
       }
-    }
 
-    const updated = await this.tenantPrisma.db.importJob.update({
-      where: { id: importJobId },
-      data: {
-        status: committed > 0 ? 'completed' : 'failed',
-        validRows: committed,
-        failedRows: commitErrors.length,
-        errors: commitErrors as any,
-        completedAt: new Date(),
-      },
+      const fileRow = job.fileId
+        ? await this.tenantPrisma.db.file.findFirst({ where: { id: job.fileId } })
+        : null;
+      if (!fileRow) throw AppErrors.notFound('Source file for this import job is missing');
+      const stream = await this.storage.getStream(fileRow.objectKey);
+      const buffer = await streamToBuffer(stream);
+
+      const { parsed, errors: parseErrors } = await this.parseAndValidate(job.entity, buffer);
+
+      if (parseErrors.length > 0 && !skipInvalid) {
+        throw AppErrors.validationFailed(
+          `${parseErrors.length} row(s) still fail validation — pass skipInvalid:true to commit the rest, or fix and re-validate`,
+        );
+      }
+
+      const commitErrors: RowError[] = [...parseErrors];
+      let committed = 0;
+
+      for (const { row, data } of parsed) {
+        try {
+          await this.tenantPrisma.db.$executeRawUnsafe('SAVEPOINT import_row');
+          await this.commitRow(ctx, job.entity, data);
+          await this.tenantPrisma.db.$executeRawUnsafe('RELEASE SAVEPOINT import_row');
+          committed++;
+        } catch (e) {
+          await this.tenantPrisma.db.$executeRawUnsafe('ROLLBACK TO SAVEPOINT import_row');
+          if (!skipInvalid)
+            throw AppErrors.validationFailed([{ row, message: (e as Error).message }]);
+          commitErrors.push({ row, errors: [(e as Error).message] });
+        }
+      }
+
+      const updated = await this.tenantPrisma.db.importJob.update({
+        where: { id: importJobId },
+        data: {
+          status: committed > 0 ? 'completed' : 'failed',
+          validRows: committed,
+          failedRows: commitErrors.length,
+          errors: commitErrors as any,
+          completedAt: new Date(),
+        },
+      });
+
+      return updated;
     });
-
-    return updated;
   }
 
   private async commitRow(ctx: AuthContext, entity: string, data: unknown): Promise<void> {
@@ -220,7 +230,7 @@ export class ImportsService {
    * finance/charges reports.
    */
   private async commitOpeningBalance(ctx: AuthContext, row: OpeningBalanceRow): Promise<void> {
-    const child = await this.tenantPrisma.db.child.findFirst({ where: { id: row.childId } });
+    const child = await this.tenantPrisma.assertChild(row.childId, 'charge:generate');
     if (!child) throw new Error(`Child ${row.childId} not found`);
 
     const asOf = new Date(row.asOfDate);

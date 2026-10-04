@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { broaderScope, PermissionScope } from '../common/auth-context';
+import { todayInTashkent } from '../common/tashkent-date';
 
 /**
  * The minimal shape `resolve()` actually needs — deliberately typed with
@@ -88,6 +89,36 @@ export class PermissionResolverService {
     return resolved;
   }
 
+  async permissionBranches(userId: string): Promise<Map<string, string[]>> {
+    const [roles, overrides, branches] = await Promise.all([
+      this.prisma.userRole.findMany({
+        where: { userId },
+        include: { role: { include: { rolePermission: true } } },
+      }),
+      this.prisma.userPermissionOverride.findMany({
+        where: {
+          userId,
+          effect: 'grant',
+          OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+        },
+      }),
+      this.branchIds(userId),
+    ]);
+    const resolved = await this.resolve(userId);
+    const result = new Map<string, string[]>();
+    for (const role of roles)
+      for (const grant of role.role.rolePermission)
+        if (grant.scope === resolved.get(grant.permissionKey))
+          result.set(grant.permissionKey, [
+            ...new Set([
+              ...(result.get(grant.permissionKey) ?? []),
+              ...(role.branchId ? [role.branchId] : branches),
+            ]),
+          ]);
+    for (const override of overrides) result.set(override.permissionKey, branches);
+    return result;
+  }
+
   async branchIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.userBranch.findMany({
       where: { userId },
@@ -97,8 +128,13 @@ export class PermissionResolverService {
   }
 
   async ownGroupIds(userId: string): Promise<string[]> {
+    const today = new Date(todayInTashkent());
     const rows = await this.prisma.groupStaff.findMany({
-      where: { userId, assignedTo: null },
+      where: {
+        userId,
+        assignedFrom: { lte: today },
+        OR: [{ assignedTo: null }, { assignedTo: { gte: today } }],
+      },
       select: { groupId: true },
     });
     return rows.map((r) => r.groupId);

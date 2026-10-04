@@ -28,6 +28,24 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
   ) {}
 
   onApplicationBootstrap(): void {
+    void this.boss
+      .work('notification.recover', { localConcurrency: 1 }, async () => {
+        if (!this.telegram.enabled) return;
+        const queued = await this.prisma.notification.findMany({
+          where: { status: 'queued' },
+          select: { id: true, tenantId: true },
+          take: 1000,
+          orderBy: { queuedAt: 'asc' },
+        });
+        for (const row of queued)
+          await this.boss.send(
+            NOTIFICATION_SEND_QUEUE,
+            { notificationId: row.id, tenantId: row.tenantId },
+            { singletonKey: row.id, retryLimit: 3, retryBackoff: true, retryDelay: 2 },
+          );
+      })
+      .then(() => this.boss.schedule('notification.recover', '* * * * *', {}))
+      .catch((e) => this.logger.error(e));
     this.boss
       .work<NotificationJobData>(
         NOTIFICATION_SEND_QUEUE,
@@ -40,17 +58,54 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
   }
 
   private async processJob(job: JobWithMetadata<NotificationJobData>): Promise<void> {
-    const notification = await this.prisma.notification.findFirst({
+    const failure = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM notification WHERE id = ${job.data.notificationId}::uuid AND tenant_id = ${job.data.tenantId}::uuid FOR UPDATE`;
+        return this.processLocked(job, tx);
+      },
+      { timeout: 60000 },
+    );
+    if (failure) throw failure;
+  }
+
+  private async processLocked(
+    job: JobWithMetadata<NotificationJobData>,
+    db: any,
+  ): Promise<Error | void> {
+    const notification = await db.notification.findFirst({
       where: { id: job.data.notificationId, tenantId: job.data.tenantId },
     });
     // Already handled by an earlier attempt (or the row was somehow
     // removed) — nothing to do, and definitely nothing to retry.
     if (!notification || notification.status !== 'queued') return;
 
+    if (notification.announcementId) {
+      const announcement = await db.announcement.findFirst({
+        where: { id: notification.announcementId, tenantId: job.data.tenantId },
+      });
+      if (
+        !announcement ||
+        announcement.deletedAt ||
+        (announcement.expiresAt && announcement.expiresAt <= new Date())
+      ) {
+        await db.notification.update({
+          where: { id: notification.id },
+          data: { status: 'skipped', lastError: 'Announcement removed or expired' },
+        });
+        return;
+      }
+      if (announcement.publishAt && announcement.publishAt > new Date()) {
+        await this.boss.send(NOTIFICATION_SEND_QUEUE, job.data, {
+          startAfter: announcement.publishAt,
+          singletonKey: notification.id,
+        });
+        return;
+      }
+    }
     if (notification.channel === 'internal') {
       // "Internal" means it sits in the system for the admin to relay by
       // phone (§8.2) — there's nothing further to deliver.
-      await this.prisma.notification.update({
+      await db.notification.update({
         where: { id: notification.id },
         data: { status: 'sent', sentAt: new Date() },
       });
@@ -60,7 +115,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
     if (notification.channel !== 'telegram') {
       // sms/email have no provider wired in Stage 1 (05-telegram-spec.md
       // §1 — SMS requires a paid contract not yet in place).
-      await this.prisma.notification.update({
+      await db.notification.update({
         where: { id: notification.id },
         data: {
           status: 'skipped',
@@ -84,7 +139,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
     });
 
     if (!activeBinding) {
-      await this.prisma.notification.update({
+      await db.notification.update({
         where: { id: notification.id },
         data: { status: 'skipped', lastError: 'recipient is not bound to Telegram' },
       });
@@ -92,7 +147,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
     }
 
     if (activeBinding.blockedBot) {
-      await this.prisma.notification.update({
+      await db.notification.update({
         where: { id: notification.id },
         data: { status: 'failed', lastError: 'bot was previously blocked by this recipient' },
       });
@@ -102,7 +157,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
     const result = await this.telegram.sendMessage(activeBinding.chatId, notification.renderedBody);
 
     if (result.ok) {
-      await this.prisma.notification.update({
+      await db.notification.update({
         where: { id: notification.id },
         data: { status: 'sent', sentAt: new Date(), attempts: { increment: 1 } },
       });
@@ -123,7 +178,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
 
       case 'blocked':
         await this.binding.markBlocked(activeBinding.id);
-        await this.prisma.notification.update({
+        await db.notification.update({
           where: { id: notification.id },
           data: {
             status: 'failed',
@@ -135,7 +190,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
 
       case 'chat_not_found':
         await this.binding.markUnboundById(activeBinding.id);
-        await this.prisma.notification.update({
+        await db.notification.update({
           where: { id: notification.id },
           data: {
             status: 'failed',
@@ -152,7 +207,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
         // definitive 'failed' row instead of leaving it implicitly
         // exhausted inside pg-boss with no matching notification state.
         const isFinalAttempt = job.retryCount >= job.retryLimit;
-        await this.prisma.notification.update({
+        await db.notification.update({
           where: { id: notification.id },
           data: {
             attempts: { increment: 1 },
@@ -161,7 +216,7 @@ export class NotificationWorkerService implements OnApplicationBootstrap {
           },
         });
         if (!isFinalAttempt) {
-          throw new Error(`Telegram send failed (${result.status}): ${result.message}`);
+          return new Error(`Telegram send failed (${result.status}): ${result.message}`);
         }
         return;
       }

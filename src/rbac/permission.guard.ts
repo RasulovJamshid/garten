@@ -45,16 +45,24 @@ export class PermissionGuard implements CanActivate {
         ctx.getClass(),
       ]) ?? [];
 
-    const [branchIds, ownGroupIds] = await Promise.all([
+    const [branchIds, ownGroupIds, permissionBranches] = await Promise.all([
       this.resolver.branchIds(req.user.sub),
       this.resolver.ownGroupIds(req.user.sub),
+      this.resolver.permissionBranches(req.user.sub),
     ]);
 
     if (required.length === 0) {
       // No permission declared: JwtAuthGuard already enforced authentication.
       // Still attach a (cheap, uncached) context in case the handler reads it.
       const perms = await this.resolver.resolve(req.user.sub);
-      req.authContext = new AuthContext(req.user.sub, req.user.tid, branchIds, ownGroupIds, perms);
+      req.authContext = new AuthContext(
+        req.user.sub,
+        req.user.tid,
+        branchIds,
+        ownGroupIds,
+        perms,
+        permissionBranches,
+      );
       return true;
     }
 
@@ -71,7 +79,14 @@ export class PermissionGuard implements CanActivate {
       this.cache.set(cacheKey, perms);
     }
 
-    req.authContext = new AuthContext(req.user.sub, req.user.tid, branchIds, ownGroupIds, perms);
+    req.authContext = new AuthContext(
+      req.user.sub,
+      req.user.tid,
+      branchIds,
+      ownGroupIds,
+      perms,
+      permissionBranches,
+    );
 
     const missing = required.filter((key) => !perms!.has(key));
     if (missing.length > 0) {

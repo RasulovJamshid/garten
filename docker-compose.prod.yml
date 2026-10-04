@@ -91,6 +91,15 @@ services:
       context: .
       dockerfile: Dockerfile
     image: ${API_IMAGE:-kindergarten-api:prod}
+    # Existing published images put the entry point in dist/src. New builds
+    # explicitly compile src/ to dist/. Support both during this transition.
+    command:
+      - sh
+      - -c
+      - >-
+        npx prisma migrate deploy &&
+        if [ -f dist/main.js ]; then exec node dist/main.js;
+        else exec node dist/src/main.js; fi
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -110,27 +119,21 @@ services:
       # baked into the image) or every redeploy would wipe uploaded files.
       - storage_data:/app/data/files
 
-  # Client UI (UI_DOMAIN). Built and published from its OWN repo as a
-  # static Vite/React bundle baked into an image that serves it on :80
-  # (nginx or caddy inside the image, including the SPA history fallback).
-  # Nothing is built here — this stack only runs the published image.
-  #
-  # Gated behind a compose profile because that image doesn't exist yet:
-  # without the profile, every `docker compose up -d` on the server would
-  # try to pull ${WEB_IMAGE} and fail the whole stack, API included. Once
-  # the frontend repo publishes its first image, set WEB_IMAGE and add
-  # `--profile web` to the compose commands (DEPLOYMENT.md §8).
-  #
-  # No env_file: the API base URL is baked into a static bundle at BUILD
-  # time (VITE_API_URL=https://<API_DOMAIN>), so runtime env does nothing
-  # for it. Changing the API host means rebuilding the web image.
+  # TanStack Start SSR frontend from AzizBokhidjonov/alishax.
+  # scripts/deploy-frontend.sh builds this local image and updates only web.
   web:
     profiles: ['web']
     image: ${WEB_IMAGE:-alishax-web:prod}
     restart: unless-stopped
-    # No `ports:` — only caddy reaches it, as `web:80` on the internal network.
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
     expose:
-      - '80'
+      - '3000'
+    init: true
+    security_opt:
+      - no-new-privileges:true
 
   caddy:
     image: caddy:2-alpine

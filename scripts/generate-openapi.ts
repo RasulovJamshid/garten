@@ -1,3 +1,5 @@
+import { responseContracts } from './response-contracts';
+import { applyResponseContracts } from '../src/common/openapi-contracts';
 /**
  * Regenerates the committed openapi.json without booting the server or
  * touching the database. main.ts writes the same document on every boot;
@@ -23,6 +25,9 @@ async function main() {
       .build(),
   );
 
+  const contracts = responseContracts();
+  applyResponseContracts(document, contracts);
+  writeFileSync('./src/common/response-contracts.json', JSON.stringify(contracts, null, 2));
   writeFileSync('./openapi.json', JSON.stringify(document, null, 2));
   await app.close();
   // eslint-disable-next-line no-console

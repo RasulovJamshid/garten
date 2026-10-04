@@ -15,3 +15,9 @@ export class AssignChildTariffDto {
   @IsDateString()
   effectiveTo?: string;
 }
+
+export class EndChildTariffDto {
+  @ApiProperty({ format: 'date' })
+  @IsDateString()
+  effectiveTo!: string;
+}

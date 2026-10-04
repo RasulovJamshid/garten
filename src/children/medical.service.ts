@@ -18,6 +18,7 @@ export class MedicalService {
    * writes.
    */
   async get(ctx: AuthContext, childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'medical:read');
     const [record, allergies, medications] = await Promise.all([
       this.tenantPrisma.db.medicalRecord.findUnique({ where: { childId } }),
       this.tenantPrisma.db.allergy.findMany({ where: { childId, deletedAt: null } }),
@@ -35,6 +36,7 @@ export class MedicalService {
   }
 
   async alerts(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'medical:alerts');
     const allergies = await this.tenantPrisma.db.allergy.findMany({
       where: { childId, deletedAt: null },
       select: { allergen: true, severity: true, instruction: true },
@@ -50,6 +52,7 @@ export class MedicalService {
   }
 
   async update(ctx: AuthContext, childId: string, dto: UpdateMedicalDto) {
+    await this.tenantPrisma.assertChild(childId, 'medical:write');
     await this.tenantPrisma.db.$transaction(async (tx) => {
       await tx.medicalRecord.upsert({
         where: { childId },
@@ -121,6 +124,6 @@ export class MedicalService {
       entityId: childId,
     });
 
-    return this.get(ctx, childId);
+    return { updated: true, childId };
   }
 }

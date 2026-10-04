@@ -1,5 +1,7 @@
 # Frontend Integration Guide — Kindergarten Management System
 
+> **Current contract:** Read [the October correction record](project-fixes-2026-10-03.md), [the backend handoff](backend-handoff-2026-09-11.md), and the current `openapi.json`. They supersede conflicting historical examples below.
+
 Everything a frontend developer (or the `frontend-developer` agent) needs to build a UI
 against the Stage 1 backend API. The backend is the single source of truth; this guide
 summarizes the parts of it that the client must honor exactly.
@@ -264,7 +266,7 @@ formatter over `BigInt` directly if you display totals above ~90 billion tiyin.
 ## 6. Dates & timezone
 
 - **Timestamps:** ISO 8601 **with offset** — `2026-07-29T08:14:00+05:00`. Parse as-is.
-- **Calendar dates:** `YYYY-MM-DD`, always **Asia/Tashkent** local (attendance days, etc.).
+- **Calendar date inputs:** `YYYY-MM-DD`, interpreted in **Asia/Tashkent**. Prisma DATE fields in responses serialize as ISO timestamps; use their date portion without applying a timezone conversion.
   Do not convert these through the browser's timezone — treat them as plain local dates or the
   day can shift.
 - **Billing periods:** `{ "year": 2026, "month": 7 }` (month is 1-based).
@@ -274,7 +276,7 @@ formatter over `BigInt` directly if you display totals above ~90 billion tiyin.
 
 ## 7. Lists — pagination, sorting, search, filters
 
-All list endpoints share one shape:
+The children directory returns the envelope below. Other ordinary JSON array collection endpoints return it when `page` or `limit` is supplied; without pagination parameters they retain their array response. Reports and aggregate responses have their own contracts.
 
 ```
 GET /children?page=1&limit=50&sort=lastName:asc&q=alisher&status=active

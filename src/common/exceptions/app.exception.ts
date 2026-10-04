@@ -68,5 +68,6 @@ export const AppErrors = {
     new AppException('PERIOD_CLOSED', message, 409),
   billingAlreadyCommitted: (message = 'Billing run already committed for this period') =>
     new AppException('BILLING_ALREADY_COMMITTED', message, 409),
-  conflict: (message = 'Conflicting state') => new AppException('CONFLICT', message, 409),
+  conflict: (message = 'Conflicting state') =>
+    new AppException(message.match(/^([A-Z][A-Z0-9_]+)(?::|$)/)?.[1] ?? 'CONFLICT', message, 409),
 } as const;

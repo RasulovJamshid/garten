@@ -43,6 +43,7 @@ export class ChildrenController {
   @ApiOkResponse({ type: ChildListResponseDto })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'groupId', required: false })
+  @ApiQuery({ name: 'branchId', required: false })
   @ApiQuery({ name: 'q', required: false, description: 'Matches first, last, or middle name' })
   @ApiQuery({ name: 'hasDebt', required: false, type: Boolean })
   @ApiQuery({ name: 'hasMedicalAlert', required: false, type: Boolean })
@@ -53,6 +54,7 @@ export class ChildrenController {
     @Auth() ctx: AuthContext,
     @Query('status') status?: string,
     @Query('groupId') groupId?: string,
+    @Query('branchId') branchId?: string,
     @Query('q') q?: string,
     @Query('hasDebt') hasDebt?: string,
     @Query('hasMedicalAlert') hasMedicalAlert?: string,
@@ -63,6 +65,7 @@ export class ChildrenController {
     return this.children.list(ctx, {
       status,
       groupId,
+      branchId,
       q,
       hasDebt: parseBool(hasDebt, 'hasDebt'),
       hasMedicalAlert: parseBool(hasMedicalAlert, 'hasMedicalAlert'),

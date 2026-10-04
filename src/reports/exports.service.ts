@@ -5,6 +5,7 @@ import { AppErrors } from '../common/exceptions/app.exception';
 import { PgBossService } from '../jobs/pgboss.service';
 import { EXPORT_GENERATE_QUEUE, ExportJobData } from './export-job.constants';
 import { ReportParams } from './report-registry';
+import { assertExportAccess, captureReportAccess } from './report-access';
 
 /**
  * The async half of api-spec §11: "xlsx/pdf returns 202 with a job id
@@ -25,7 +26,7 @@ export class ExportsService {
         tenantId: ctx.tenantId,
         reportKey,
         format,
-        params: params as any,
+        params: { ...params, __access: captureReportAccess(ctx, reportKey) } as any,
         status: 'processing',
         createdBy: ctx.userId,
       },
@@ -41,6 +42,7 @@ export class ExportsService {
   async get(id: string) {
     const job = await this.tenantPrisma.db.exportJob.findFirst({ where: { id } });
     if (!job) throw AppErrors.notFound('Export job not found');
+    assertExportAccess(this.tenantPrisma.context, job);
     return {
       status: job.status,
       downloadUrl: job.fileId ? `/files/${job.fileId}` : null,

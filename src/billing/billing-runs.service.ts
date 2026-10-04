@@ -9,6 +9,8 @@ import { TariffsService } from '../money/tariffs.service';
 import { PeriodsService } from '../money/periods.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { calculateCharge } from './calculate-charge';
+import { allocateCredit } from '../payments/allocate-credit';
+import { validateBillingRules } from './validate-billing-rules';
 import { BillingRules } from './billing-rules.types';
 
 function dateOnly(iso: string): Date {
@@ -18,6 +20,9 @@ function dateOnly(iso: string): Date {
 export interface PreviewLine {
   childId: string;
   tariffId: string;
+  childName: string;
+  tariffName: string;
+  tariffSnapshot: any;
   kind: string;
   amountTiyin: string;
   attendedDays: number;
@@ -39,40 +44,163 @@ export class BillingRunsService {
   ) {}
 
   /** Shared by preview() and commit() — recomputed fresh both times, never trusted stale. */
-  private async computeAllLines(
+  async computeAllLines(
     year: number,
     month: number,
     rules: BillingRules,
+    db: any = this.tenantPrisma.db,
+    onlyChildId?: string,
+    snapshotAssignments?: any[],
+    frozenContext?: any,
   ): Promise<PreviewLine[]> {
-    const periodStart = dateOnly(`${year}-${String(month).padStart(2, '0')}-01`);
-    const childIds = await this.tariffs.childrenWithActiveTariffs(periodStart);
-
+    rules = validateBillingRules(rules);
+    const periodStart = new Date(Date.UTC(year, month - 1, 1));
+    const periodEnd = new Date(Date.UTC(year, month, 0));
+    const childIds = onlyChildId
+      ? [onlyChildId]
+      : await this.tariffs.childrenWithActiveTariffs(periodStart, periodEnd, db);
     const lines: PreviewLine[] = [];
     for (const childId of childIds) {
-      const context = await this.billingRules.computeChildContext(childId, year, month, rules);
-      const tariffAssignments = await this.tariffs.activeTariffsFor(childId, periodStart);
-
-      for (const assignment of tariffAssignments) {
-        const result = calculateCharge(
-          {
-            baseTiyin: assignment.tariff.amountTiyin,
-            kind: assignment.tariff.kind as any,
-            ...context,
-          },
+      const child = await db.child.findUnique({ where: { id: childId } });
+      const assignments =
+        snapshotAssignments ??
+        (await this.tariffs.activeTariffsFor(childId, periodStart, periodEnd, db));
+      const kinds = new Map<string, any[]>();
+      for (const a of assignments)
+        kinds.set(a.tariff.kind, [...(kinds.get(a.tariff.kind) ?? []), a]);
+      for (const [kind, segments] of kinds) {
+        if (
+          !snapshotAssignments &&
+          kind === 'registration_fee' &&
+          (await db.charge.findFirst({
+            where: { childId, kind, sign: 1, otherCharge: { none: { sign: -1 } } },
+          }))
+        )
+          continue;
+        let total = 0n;
+        let attendedDays = 0;
+        const trace: PreviewLine['trace'] = [];
+        const snapshots: any[] = [];
+        const context = await this.billingRules.computeChildContext(
+          childId,
+          year,
+          month,
           rules,
+          db,
+          undefined,
+          frozenContext,
+        );
+        for (const segment of segments) {
+          const part = await this.billingRules.computeChildContext(
+            childId,
+            year,
+            month,
+            rules,
+            db,
+            { start: segment.effectiveFrom, end: segment.effectiveTo },
+            segment.billingContext,
+          );
+          const segmentRules = structuredClone(rules);
+          if (!rules.discount.applyBeforeAttendance) segmentRules.discount.appliesTo = [];
+          if (
+            segments.length > 1 &&
+            (segmentRules.attendanceByKind[kind as keyof typeof segmentRules.attendanceByKind] ??
+              segmentRules.attendance.mode) === 'flat_monthly'
+          ) {
+            segmentRules.attendanceByKind[kind as keyof typeof segmentRules.attendanceByKind] =
+              'per_working_day';
+          }
+          // Round the total once; individual attendance division remains integer-rounded.
+          if (segments.length > 1) {
+            segmentRules.attendance.noAttendanceBehaviour = 'zero';
+            if (
+              context.forceFullTariff ||
+              (context.attendedDays === 0 &&
+                rules.attendance.noAttendanceBehaviour === 'full_tariff')
+            ) {
+              segmentRules.attendanceByKind[kind as keyof typeof segmentRules.attendanceByKind] =
+                'per_working_day';
+              if (context.forceFullTariff) part.billableDays = context.workingDays;
+            }
+          }
+          segmentRules.rounding.unit = 'tiyin';
+          segmentRules.discount.floorTiyin = '0';
+          const result = calculateCharge(
+            {
+              baseTiyin: segment.tariff.amountTiyin,
+              kind: kind as any,
+              ...part,
+              forceFullTariff: segments.length === 1 && part.forceFullTariff,
+            },
+            segmentRules,
+          );
+          total += result.amountTiyin;
+          attendedDays += part.attendedDays;
+          trace.push(
+            ...result.trace.map((t) => ({
+              ...t,
+              amount: t.amount.toString(),
+              note: [segment.tariff.name, t.note].filter(Boolean).join(': '),
+            })),
+          );
+          snapshots.push({
+            ...segment.tariff,
+            billingContext: { ...part, fixedDiscountsTiyin: part.fixedDiscountsTiyin.map(String) },
+            amountTiyin: segment.tariff.amountTiyin.toString(),
+            effectiveFrom: segment.effectiveFrom.toISOString(),
+            effectiveTo: segment.effectiveTo?.toISOString() ?? null,
+          });
+        }
+        if (
+          segments.length > 1 &&
+          context.attendedDays === 0 &&
+          rules.attendance.noAttendanceBehaviour === 'min_charge' &&
+          (rules.attendanceByKind[kind as keyof typeof rules.attendanceByKind] ??
+            rules.attendance.mode) === 'per_attended_day' &&
+          !context.forceFullTariff
+        )
+          total = BigInt(rules.attendance.minChargeTiyin);
+        const finalRules = structuredClone(rules);
+        finalRules.attendanceByKind[kind as keyof typeof finalRules.attendanceByKind] =
+          'flat_monthly';
+        finalRules.discount.applyBeforeAttendance = false;
+        if (rules.discount.applyBeforeAttendance) finalRules.discount.appliesTo = [];
+        const final = calculateCharge(
+          { baseTiyin: total, kind: kind as any, ...context },
+          finalRules,
+        );
+        trace.push(
+          ...final.trace
+            .filter((t) => t.step !== 'base')
+            .map((t) => ({ ...t, amount: t.amount.toString() })),
         );
         lines.push({
           childId,
-          tariffId: assignment.tariffId,
-          kind: assignment.tariff.kind,
-          amountTiyin: result.amountTiyin.toString(),
-          attendedDays: context.attendedDays,
+          childName: [child.firstName, child.lastName].join(' '),
+          tariffId: segments[0].tariffId,
+          tariffName: segments.map((a) => a.tariff.name).join(' / '),
+          kind,
+          amountTiyin: final.amountTiyin.toString(),
+          attendedDays,
           billableDays: context.billableDays,
-          trace: result.trace.map((t) => ({ ...t, amount: t.amount.toString() })),
+          trace,
+          tariffSnapshot: {
+            segments: snapshots,
+            context: { ...context, fixedDiscountsTiyin: context.fixedDiscountsTiyin.map(String) },
+          },
         });
       }
     }
     return lines;
+  }
+
+  async list(periodId?: string, status?: string) {
+    const runs = await this.tenantPrisma.db.billingRun.findMany({
+      where: { periodId, status },
+      include: { accountingPeriod: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return Promise.all(runs.map((run) => this.restrictRun(run, 'charge:read')));
   }
 
   async preview(ctx: AuthContext, year: number, month: number) {
@@ -115,16 +243,38 @@ export class BillingRunsService {
     return { ...run, lines };
   }
 
-  async get(id: string) {
-    const run = await this.tenantPrisma.db.billingRun.findUnique({
+  private async restrictRun<
+    T extends { previewData: any; totalTiyin: bigint | null; childCount: number | null },
+  >(run: T, permission: string): Promise<T> {
+    if (this.tenantPrisma.context.scopeFor(permission) === 'all') return run;
+    const children = await this.tenantPrisma.db.child.findMany({
+      where: this.tenantPrisma.childWhere(permission),
+      select: { id: true },
+    });
+    const ids = new Set(children.map((child) => child.id));
+    const lines = (Array.isArray(run.previewData) ? run.previewData : []).filter((line: any) =>
+      ids.has(line.childId),
+    );
+    return {
+      ...run,
+      previewData: lines,
+      totalTiyin: lines.reduce((total: bigint, line: any) => total + BigInt(line.amountTiyin), 0n),
+      childCount: new Set(lines.map((line: any) => line.childId)).size,
+    };
+  }
+
+  async get(id: string, permission = 'charge:read') {
+    const found = await this.tenantPrisma.db.billingRun.findUnique({
       where: { id },
       include: { accountingPeriod: true },
     });
+    if (!found) throw AppErrors.notFound('Billing run not found');
+    const run = await this.restrictRun(found, permission);
     if (!run) throw AppErrors.notFound('Billing run not found');
 
     if (run.status === 'committed') {
       const charges = await this.tenantPrisma.db.charge.findMany({
-        where: { billingRunId: id, sign: 1 },
+        where: { billingRunId: id, sign: 1, child: this.tenantPrisma.childWhere(permission) },
       });
       return { ...run, charges };
     }
@@ -145,7 +295,11 @@ export class BillingRunsService {
     if (run.status !== 'preview') {
       throw AppErrors.conflict('Only a preview run can be discarded');
     }
-    await this.tenantPrisma.db.billingRun.update({ where: { id }, data: { status: 'discarded' } });
+    const changed = await this.tenantPrisma.db.billingRun.updateMany({
+      where: { id, status: 'preview' },
+      data: { status: 'discarded' },
+    });
+    if (changed.count !== 1) throw AppErrors.conflict('BILLING_RUN_CHANGED');
   }
 
   /**
@@ -161,7 +315,7 @@ export class BillingRunsService {
 
     if (run.status === 'committed') {
       if (run.idempotencyKey === idempotencyKey) {
-        return this.get(id); // idempotent replay
+        return this.get(id, 'charge:generate'); // idempotent replay
       }
       throw AppErrors.conflict(
         'IDEMPOTENCY_CONFLICT: this run was already committed under a different key',
@@ -178,7 +332,7 @@ export class BillingRunsService {
 
     const rulesRow = await this.billingRules.get(run.billingRulesId);
     const rules = rulesRow.rules as unknown as BillingRules;
-    const lines = await this.computeAllLines(period.year, period.month, rules);
+    let lines = await this.computeAllLines(period.year, period.month, rules);
 
     const setting = await this.tenantPrisma.db.setting.findUnique({
       where: { tenantId: this.tenantPrisma.tenantId },
@@ -187,55 +341,91 @@ export class BillingRunsService {
     // Arrears billing: charges for period (year, month) fall due in the following month.
     const dueDate = new Date(Date.UTC(period.year, period.month, dueDay)); // JS month is 0-indexed = next month
 
-    const total = lines.reduce((acc, l) => acc + BigInt(l.amountTiyin), 0n);
-    const childCount = new Set(lines.map((l) => l.childId)).size;
+    let total = lines.reduce((acc, l) => acc + BigInt(l.amountTiyin), 0n);
+    let childCount = new Set(lines.map((l) => l.childId)).size;
 
-    // No explicit row lock on `run` here (unlike payments.service.ts's
-    // FIFO allocator) — the backstop is the DB itself: uq_charge_once
-    // (one non-manual charge per tenant/child/period/kind) and
-    // uq_billing_run_committed (one committed run per tenant/period) both
-    // make a second, concurrent commit of the same preview fail at the
-    // database layer. Caught below and turned into a clean 409 — without
-    // this catch, a genuinely legitimate race (two staff members
-    // committing at the same moment) surfaced as an unhandled 500
-    // (confirmed while adding the concurrency e2e coverage; see
-    // test/billing-concurrency.e2e-spec.ts).
+    // Row locks serialize commits; unique indexes remain the final backstop.
+    let committedNow = false;
     try {
-      await this.tenantPrisma.db.$transaction(async (tx) => {
-        for (const line of lines) {
-          const tariff = await tx.tariff.findUnique({ where: { id: line.tariffId } });
-          await tx.charge.create({
+      await this.tenantPrisma.db.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM billing_run WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+          const current = await tx.billingRun.findUniqueOrThrow({ where: { id } });
+          if (current.status !== 'preview') {
+            if (current.status === 'committed' && current.idempotencyKey === idempotencyKey) return;
+            throw AppErrors.conflict('BILLING_RUN_CHANGED: reload the run');
+          }
+          const candidateIds = await this.tariffs.childrenWithActiveTariffs(
+            new Date(Date.UTC(period.year, period.month - 1, 1)),
+            new Date(Date.UTC(period.year, period.month, 0)),
+            tx,
+          );
+          for (const childId of [...candidateIds].sort())
+            await tx.$queryRaw`SELECT id FROM child WHERE id = ${childId}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+          const fresh = await this.computeAllLines(period.year, period.month, rules, tx);
+          const signature = (items: any[]) =>
+            JSON.stringify(
+              items
+                .map((l) => [l.childId, l.kind, l.amountTiyin, l.attendedDays, l.billableDays])
+                .sort(),
+            );
+          if (signature(fresh) !== signature((run.previewData ?? []) as any[]))
+            throw AppErrors.conflict(
+              'BILLING_PREVIEW_STALE: attendance or tariff data changed; create a new preview',
+            );
+          lines = fresh;
+          total = lines.reduce((acc, line) => acc + BigInt(line.amountTiyin), 0n);
+          childCount = new Set(lines.map((line) => line.childId)).size;
+          committedNow = true;
+          for (const line of lines) {
+            const tariff = await tx.tariff.findUnique({ where: { id: line.tariffId } });
+            await tx.charge.create({
+              data: {
+                tenantId: this.tenantPrisma.tenantId,
+                branchId:
+                  tariff!.branchId ??
+                  (await tx.child.findUnique({ where: { id: line.childId } }))!.branchId,
+                childId: line.childId,
+                periodId: run.periodId,
+                billingRunId: run.id,
+                billingRulesId: rulesRow.id,
+                kind: line.kind,
+                amountTiyin: BigInt(line.amountTiyin),
+                sign: 1,
+                tariffSnapshot: line.tariffSnapshot,
+                calculationTrace: line.trace as any,
+                dueDate,
+                createdBy: ctx.userId,
+              },
+            });
+          }
+
+          for (const childId of new Set(lines.map((l) => l.childId)))
+            await allocateCredit(tx, ctx.tenantId, childId);
+
+          await tx.billingRun.update({
+            where: { id },
             data: {
-              tenantId: this.tenantPrisma.tenantId,
-              branchId:
-                tariff!.branchId ??
-                (await tx.child.findUnique({ where: { id: line.childId } }))!.branchId,
-              childId: line.childId,
-              periodId: run.periodId,
-              billingRunId: run.id,
-              billingRulesId: rulesRow.id,
-              kind: line.kind,
-              amountTiyin: BigInt(line.amountTiyin),
-              sign: 1,
-              tariffSnapshot: tariff as any,
-              calculationTrace: line.trace as any,
-              dueDate,
-              createdBy: ctx.userId,
+              status: 'committed',
+              committedAt: new Date(),
+              idempotencyKey,
+              totalTiyin: total,
+              childCount,
             },
           });
-        }
-
-        await tx.billingRun.update({
-          where: { id },
-          data: {
-            status: 'committed',
-            committedAt: new Date(),
-            idempotencyKey,
-            totalTiyin: total,
-            childCount,
-          },
-        });
-      });
+          await this.audit.log(
+            {
+              userId: ctx.userId,
+              action: 'billing.commit',
+              entityType: 'billing_run',
+              entityId: id,
+              newValue: { periodId: run.periodId, childCount, totalTiyin: total.toString() },
+            },
+            tx,
+          );
+        },
+        { timeout: 60000 },
+      );
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw AppErrors.conflict(
@@ -245,19 +435,13 @@ export class BillingRunsService {
       throw e;
     }
 
-    await this.audit.log({
-      userId: ctx.userId,
-      action: 'billing.commit',
-      entityType: 'billing_run',
-      entityId: id,
-      newValue: { periodId: run.periodId, childCount, totalTiyin: total.toString() },
-    });
+    if (!committedNow) return this.get(id, 'charge:generate');
 
     // Never send inside the request that triggered it (§4) — queue only,
     // and never let a notification problem fail a committed billing run.
     void this.notifyChargesCreated(run.id, period.year, period.month, dueDate, lines);
 
-    return this.get(id);
+    return this.get(id, 'charge:generate');
   }
 
   /**

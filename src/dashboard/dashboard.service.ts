@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuthContext } from '../common/auth-context';
-import { todayInTashkent } from '../common/tashkent-date';
+import { todayInTashkent, timestampRange } from '../common/tashkent-date';
 import { AttendanceService } from '../attendance/attendance.service';
 import { DebtsService } from '../debts/debts.service';
 import { ExpensesService } from '../expenses/expenses.service';
@@ -36,7 +36,9 @@ export class DashboardService {
       boundCount,
       monthExpenses,
     ] = await Promise.all([
-      this.tenantPrisma.db.child.count({ where: { status: 'active' } }),
+      this.tenantPrisma.db.child.count({
+        where: { status: 'active', deletedAt: null, ...this.tenantPrisma.childWhere('child:read') },
+      }),
       this.attendance.inside(ctx),
       this.attendance.absent(ctx, today),
       this.debts.summary(),
@@ -49,7 +51,12 @@ export class DashboardService {
 
     const thisMonth = new Date(today).getMonth() + 1;
     const paymentsThisMonth = await this.tenantPrisma.db.payment.aggregate({
-      where: { sign: 1, paidAt: { gte: new Date(`${today.slice(0, 7)}-01`) } },
+      where: {
+        sign: 1,
+        otherPayment: { none: { sign: -1 } },
+        child: this.tenantPrisma.childWhere('payment:read'),
+        paidAt: timestampRange(today.slice(0, 7) + '-01', today),
+      },
       _sum: { amountTiyin: true },
     });
 
@@ -68,22 +75,31 @@ export class DashboardService {
 
   async accountant() {
     const today = todayInTashkent();
-    const startOfMonth = new Date(`${today.slice(0, 7)}-01`);
 
     const [paymentsToday, chargesThisMonth, debtSummary, unpaidExpenses, openPeriod] =
       await Promise.all([
         this.tenantPrisma.db.payment.aggregate({
-          where: { sign: 1, paidAt: { gte: new Date(today) } },
+          where: {
+            sign: 1,
+            otherPayment: { none: { sign: -1 } },
+            child: this.tenantPrisma.childWhere('payment:read'),
+            paidAt: timestampRange(today, today),
+          },
           _sum: { amountTiyin: true },
           _count: true,
         }),
         this.tenantPrisma.db.charge.aggregate({
-          where: { sign: 1, issuedAt: { gte: startOfMonth } },
+          where: {
+            sign: 1,
+            otherCharge: { none: { sign: -1 } },
+            child: this.tenantPrisma.childWhere('charge:read'),
+            issuedAt: timestampRange(today.slice(0, 7) + '-01', today),
+          },
           _sum: { amountTiyin: true },
         }),
         this.debts.summary(),
         this.tenantPrisma.db.expense.aggregate({
-          where: { status: 'unpaid' },
+          where: { status: 'unpaid', ...this.tenantPrisma.branchWhere('expense:read') },
           _sum: { amountTiyin: true },
           _count: true,
         }),

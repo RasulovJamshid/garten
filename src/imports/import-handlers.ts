@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { CreateChildDto } from '../children/dto/create-child.dto';
 import { CreateGuardianDto } from '../guardians/dto/create-guardian.dto';
 import { CreateGroupDto } from '../groups/dto/create-group.dto';
@@ -60,7 +61,7 @@ function randomPassword(): string {
   // 12 chars, alnum — plenty for an admin-distributed temp password that
   // must be changed on first real login (Stage 1 has no forced-change
   // flow yet, so this is communicated out of band by whoever ran the import).
-  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
+  return randomBytes(24).toString('base64url');
 }
 
 export const IMPORT_HANDLERS: Record<string, ImportHandler<any>> = {

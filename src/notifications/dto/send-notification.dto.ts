@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-const CHANNELS = ['telegram', 'sms', 'internal', 'email'] as const;
+const CHANNELS = ['telegram', 'internal'] as const;
 
 export class NotificationRecipientDto {
   @ApiProperty({ required: false })
@@ -48,7 +48,7 @@ export class SendNotificationDto {
   // Feeds dedup_key = sha256(templateKey + recipientId + entityId) — the
   // caller supplies the natural id of whatever triggered this (a payment,
   // a charge, an attendance record). Omitted for one-off manual sends,
-  // where at most one of this template ever reaches a given recipient.
+  // where the persisted Idempotency-Key identifies the send across retries.
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

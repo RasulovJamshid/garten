@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AppErrors } from '../common/exceptions/app.exception';
 import { PgBossService } from '../jobs/pgboss.service';
@@ -17,11 +17,9 @@ export interface NotificationJobData {
  * dedup_key = sha256(templateKey + recipientId + entityId), enforced by a
  * unique index in Postgres (uq_notification_dedup) — a retried request, a
  * double-clicked button, or a replayed offline check-in all collapse to
- * one row (05-telegram-spec.md §4). This is also what makes
- * `POST /notifications/send` safe to retry without a persisted
- * Idempotency-Key ledger: the content-addressed key already guarantees
- * exactly one notification per (template, recipient, entity) tuple, a
- * stronger guarantee than comparing a client-supplied header would give.
+ * one row (05-telegram-spec.md §4). Manual sends persist an Idempotency-Key
+ * request record with a payload hash and event ID, so retries without a
+ * domain entity also reuse the same per-recipient dedup keys.
  */
 function dedupKey(templateKey: string, recipientId: string, entityId: string): string {
   return createHash('sha256').update(`${templateKey}:${recipientId}:${entityId}`).digest('hex');
@@ -75,12 +73,42 @@ export class NotificationsService {
    * must not block on Telegram's API (§4 "Never send inside the request
    * that triggered it").
    */
-  async send(dto: SendNotificationDto) {
+  async send(dto: SendNotificationDto, idempotencyKey?: string) {
+    if (!['telegram', 'internal'].includes(dto.channel))
+      throw AppErrors.validationFailed('Unsupported notification channel');
+    let eventId = dto.entityId ?? randomUUID();
     const template = await this.tenantPrisma.db.notificationTemplate.findFirst({
       where: { templateKey: dto.templateKey },
     });
     if (!template) throw AppErrors.notFound(`Unknown template key "${dto.templateKey}"`);
     if (!template.enabled) throw AppErrors.conflict(`Template "${dto.templateKey}" is disabled`);
+    if (idempotencyKey) {
+      if (idempotencyKey.length > 128 || !idempotencyKey.trim())
+        throw AppErrors.validationFailed('Idempotency-Key must contain 1 to 128 characters');
+      const requestHash = createHash('sha256')
+        .update(
+          JSON.stringify({
+            templateKey: dto.templateKey,
+            channel: dto.channel,
+            entityId: dto.entityId ?? null,
+            data: Object.fromEntries(
+              Object.entries(dto.data).sort(([a], [b]) => a.localeCompare(b)),
+            ),
+            recipients: dto.recipients
+              .map((r) => ({ guardianId: r.guardianId ?? null, userId: r.userId ?? null }))
+              .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+          }),
+        )
+        .digest('hex');
+      const request = await this.tenantPrisma.db.notificationRequest.upsert({
+        where: { tenantId_key: { tenantId: this.tenantPrisma.tenantId, key: idempotencyKey } },
+        create: { tenantId: this.tenantPrisma.tenantId, key: idempotencyKey, requestHash },
+        update: {},
+      });
+      if (request.requestHash !== requestHash)
+        throw AppErrors.conflict('IDEMPOTENCY_CONFLICT: notification payload differs');
+      eventId = dto.entityId ?? request.eventId;
+    }
 
     const results: {
       recipient: (typeof dto.recipients)[number];
@@ -117,7 +145,7 @@ export class NotificationsService {
         }
       }
 
-      const entityId = dto.entityId ?? 'manual';
+      const entityId = eventId;
       const key = dedupKey(dto.templateKey, recipientKey, entityId);
       const notificationId = await this.enqueueDeduped({
         templateKey: dto.templateKey,
@@ -159,6 +187,7 @@ export class NotificationsService {
     renderedBody: string;
     payload: Record<string, string>;
     dedupKey: string;
+    startAfter?: Date;
   }): Promise<string> {
     const rows = await this.tenantPrisma.db.$queryRaw<{ id: string }[]>`
       INSERT INTO notification (
@@ -179,7 +208,13 @@ export class NotificationsService {
     await this.boss.send(
       NOTIFICATION_SEND_QUEUE,
       { notificationId, tenantId: this.tenantPrisma.tenantId } as NotificationJobData,
-      { retryLimit: 3, retryBackoff: true, retryDelay: 2 },
+      {
+        retryLimit: 3,
+        retryBackoff: true,
+        retryDelay: 2,
+        singletonKey: notificationId,
+        startAfter: row.startAfter,
+      },
     );
     return notificationId;
   }
@@ -207,7 +242,6 @@ export class NotificationsService {
         },
       },
       orderBy: { queuedAt: 'desc' },
-      take: 500,
     });
   }
 

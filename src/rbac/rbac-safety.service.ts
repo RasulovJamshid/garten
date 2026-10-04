@@ -48,12 +48,43 @@ export class RbacSafetyService {
     }
   }
 
-  assertGrantable(ctx: AuthContext, key: string, scope: string): PermissionDef {
+  assertGrantable(
+    ctx: AuthContext,
+    key: string,
+    scope: string,
+    branchIds?: string[],
+  ): PermissionDef {
     const permission = this.assertPermissionExists(key);
     this.assertValidScope(permission, scope);
     this.assertCanGrant(ctx, key);
+    const ownScope = ctx.scopeFor(key);
+    if (ownScope !== 'all' && ownScope !== scope) {
+      throw AppErrors.privilegeEscalation(`Cannot grant '${key}' outside your '${ownScope}' scope`);
+    }
+    if (ownScope !== 'all' && branchIds) {
+      const allowed = ctx.requireBranchIds(key);
+      if (branchIds.some((id) => !allowed.includes(id)))
+        throw AppErrors.privilegeEscalation(`Cannot grant '${key}' in an inaccessible branch`);
+    }
     this.assertCanGrantSensitive(ctx, permission);
     return permission;
+  }
+
+  async assertRoleGrantable(
+    ctx: AuthContext,
+    key: string,
+    scope: string,
+    roleId: string,
+    db: any,
+  ): Promise<void> {
+    const holders = await db.userRole.findMany({
+      where: { roleId },
+      include: { appUser: { include: { userBranch: true } } },
+    });
+    const branches: string[] = holders.flatMap((holder: any) =>
+      holder.branchId ? [holder.branchId] : holder.appUser.userBranch.map((b: any) => b.branchId),
+    );
+    this.assertGrantable(ctx, key, scope, branches);
   }
 
   /**

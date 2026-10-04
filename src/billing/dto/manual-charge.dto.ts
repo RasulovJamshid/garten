@@ -12,7 +12,7 @@ export class CreateManualChargeDto {
 
   @ApiProperty({
     description:
-      'Integer tiyin as a string — always positive; use a negative percent/fixed discount or /charges/:id/reverse for reductions',
+      'Integer tiyin as a string — always positive; use /charges/adjustments or /charges/:id/reverse for reductions',
   })
   @Matches(/^\d+$/, { message: 'amountTiyin must be a non-negative integer string' })
   amountTiyin!: string;

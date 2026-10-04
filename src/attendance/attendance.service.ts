@@ -6,6 +6,8 @@ import { AuthContext } from '../common/auth-context';
 import { andWhere } from '../common/prisma-where';
 import { todayInTashkent, currentTimeInTashkent } from '../common/tashkent-date';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RecalculateBillingService } from '../billing/recalculate-billing.service';
+import { effectiveOn, timestampRange } from '../common/tashkent-date';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 import { SetAttendanceStatusDto } from './dto/set-attendance-status.dto';
@@ -36,6 +38,7 @@ export class AttendanceService {
     private readonly tenantPrisma: TenantPrisma,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly billing: RecalculateBillingService,
   ) {}
 
   /**
@@ -69,7 +72,7 @@ export class AttendanceService {
     }
   }
 
-  private scopedWhere(ctx: AuthContext, date?: string): Record<string, unknown> {
+  private scopedWhere(ctx: AuthContext): Record<string, unknown> {
     const scope = ctx.scopeFor('attendance:read');
     if (!scope) throw AppErrors.forbidden("Missing permission: 'attendance:read'");
 
@@ -77,11 +80,17 @@ export class AttendanceService {
       case 'all':
         return {};
       case 'branch':
-        return { branchId: { in: ctx.requireBranchIds() } };
+        return { branchId: { in: ctx.requireBranchIds('attendance:read') } };
       case 'own_group':
-        return { groupId: { in: ctx.requireOwnGroupIds() } };
+        return {
+          groupId: { in: ctx.requireOwnGroupIds() },
+          branchId: { in: ctx.requireBranchIds('attendance:read') },
+        };
       case 'today':
-        return { attendanceDate: dateOnly(date ?? todayInTashkent()) };
+        return {
+          attendanceDate: dateOnly(todayInTashkent()),
+          branchId: { in: ctx.requireBranchIds('attendance:read') },
+        };
       default:
         throw AppErrors.invalidScope(`Unsupported scope '${scope}' for attendance:read`);
     }
@@ -91,12 +100,51 @@ export class AttendanceService {
     select: { id: true, firstName: true, lastName: true },
   } as const;
 
+  async board(ctx: AuthContext, groupId?: string, branchId?: string) {
+    const date = todayInTashkent();
+    const children = await this.tenantPrisma.db.child.findMany({
+      where: {
+        AND: [
+          {
+            deletedAt: null,
+            status: 'active',
+            ...(branchId ? { branchId } : {}),
+            ...(groupId ? { groupAssignment: { some: { groupId, ...effectiveOn(date) } } } : {}),
+          },
+          this.tenantPrisma.childWhere('attendance:read', date),
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        branchId: true,
+        photoFileId: true,
+        groupAssignment: {
+          where: effectiveOn(date),
+          select: { groupId: true, childGroup: { select: { name: true } } },
+        },
+      },
+      orderBy: [{ lastName: 'asc' }, { id: 'asc' }],
+    });
+    const rows = await this.today(ctx, groupId, branchId);
+    const attendance = new Map(rows.map((row) => [row.childId, row]));
+    return {
+      date,
+      data: children.map((child) => ({
+        child,
+        attendance: attendance.get(child.id) ?? null,
+        recorded: attendance.has(child.id),
+      })),
+    };
+  }
+
   async today(ctx: AuthContext, groupId?: string, branchId?: string) {
     const date = todayInTashkent();
     // andWhere, not assignment: `groupId`/`branchId` collide head-on with
     // the own_group/branch scope clauses (prisma-where.ts).
     let where: Record<string, unknown> = { attendanceDate: dateOnly(date) };
-    where = andWhere(where, this.scopedWhere(ctx, date));
+    where = andWhere(where, this.scopedWhere(ctx));
     if (groupId) where = andWhere(where, { groupId });
     if (branchId) where = andWhere(where, { branchId });
     return this.tenantPrisma.db.attendanceDay.findMany({
@@ -118,7 +166,7 @@ export class AttendanceService {
     },
   ) {
     let where: Record<string, unknown> = {};
-    where = andWhere(where, this.scopedWhere(ctx, filters.date));
+    where = andWhere(where, this.scopedWhere(ctx));
     if (filters.date) where = andWhere(where, { attendanceDate: dateOnly(filters.date) });
     if (filters.groupId) where = andWhere(where, { groupId: filters.groupId });
     if (filters.childId) where = andWhere(where, { childId: filters.childId });
@@ -135,7 +183,6 @@ export class AttendanceService {
       where,
       include: { child: this.childSelect },
       orderBy: { attendanceDate: 'desc' },
-      take: 500,
     });
   }
 
@@ -144,7 +191,7 @@ export class AttendanceService {
     const date = todayInTashkent();
     const where = andWhere(
       { attendanceDate: dateOnly(date), checkInAt: { not: null }, checkOutAt: null },
-      this.scopedWhere(ctx, date),
+      this.scopedWhere(ctx),
     );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
@@ -157,7 +204,7 @@ export class AttendanceService {
     const d = date ?? todayInTashkent();
     const where = andWhere(
       { attendanceDate: dateOnly(d), status: { in: ['absent', 'sick', 'vacation', 'excused'] } },
-      this.scopedWhere(ctx, d),
+      this.scopedWhere(ctx),
     );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
@@ -179,7 +226,7 @@ export class AttendanceService {
 
     const where = andWhere(
       { attendanceDate: dateOnly(date), checkInAt: { not: null }, checkOutAt: null },
-      this.scopedWhere(ctx, date),
+      this.scopedWhere(ctx),
     );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
@@ -197,6 +244,7 @@ export class AttendanceService {
     );
     return this.tenantPrisma.db.attendanceDay.findMany({
       where,
+      include: { child: this.childSelect },
       orderBy: { attendanceDate: 'asc' },
     });
   }
@@ -230,200 +278,349 @@ export class AttendanceService {
     return [...byChild.values()];
   }
 
-  async checkIn(ctx: AuthContext, dto: CheckInDto) {
-    const child = await this.tenantPrisma.db.child.findUnique({ where: { id: dto.childId } });
-    if (!child) throw AppErrors.notFound('Child not found');
+  private assertOperationalDate(ctx: AuthContext, date: string) {
+    if (date !== todayInTashkent())
+      throw AppErrors.conflict(
+        'USE_ATTENDANCE_CORRECTION: operational attendance must be recorded today',
+      );
+  }
 
-    const at = dto.at ? new Date(dto.at) : new Date();
-    const attendanceDate = dateOnly(todayInTashkent(at));
-
-    const existing = await this.tenantPrisma.db.attendanceDay.findUnique({
+  private async authorizedPickup(
+    tx: any,
+    childId: string,
+    at: Date,
+    personId?: string,
+    permissionId?: string,
+  ) {
+    if (!personId && !permissionId) throw AppErrors.conflict('PICKUP_AUTHORIZATION_REQUIRED');
+    const date = dateOnly(todayInTashkent(at));
+    const permission = await tx.pickupPermission.findFirst({
       where: {
-        tenantId_childId_attendanceDate: {
-          tenantId: ctx.tenantId,
-          childId: dto.childId,
-          attendanceDate,
-        },
+        childId,
+        ...(permissionId ? { id: permissionId } : {}),
+        ...(personId ? { pickupPersonId: personId } : {}),
+        revokedAt: null,
+        validFrom: { lte: date },
+        OR: [{ validTo: null }, { validTo: { gte: date } }],
       },
+      include: { pickupPerson: true },
+      orderBy: { createdAt: 'desc' },
     });
-    if (existing) throw AppErrors.conflict('ALREADY_CHECKED_IN');
+    if (
+      !permission ||
+      permission.pickupPerson?.revokedAt ||
+      (permission.pickupPerson && permission.pickupPerson.childId !== childId)
+    ) {
+      throw AppErrors.conflict('PICKUP_NOT_AUTHORIZED');
+    }
+    return permission;
+  }
 
-    const currentGroup = await this.tenantPrisma.db.groupAssignment.findFirst({
-      where: { childId: dto.childId, effectiveTo: null },
-    });
-
-    const row = await this.tenantPrisma.db.attendanceDay.create({
-      data: {
-        tenantId: ctx.tenantId,
-        branchId: child.branchId,
-        childId: dto.childId,
-        groupId: currentGroup?.groupId,
-        attendanceDate,
-        status: 'present',
-        checkInAt: at,
-        checkInBy: ctx.userId,
-        checkInNote: dto.note,
-        healthObservation: dto.healthObservation,
-      },
-    });
-
-    // Check-in triggers a parent notification asynchronously (pg-boss),
-    // never blocking this response (api-spec §7, §363).
-    void this.notifyGuardians(
+  async checkIn(ctx: AuthContext, dto: CheckInDto) {
+    const at = dto.at ? new Date(dto.at) : new Date();
+    const date = todayInTashkent(at);
+    this.assertOperationalDate(ctx, date);
+    const child = await this.tenantPrisma.assertChild(
       dto.childId,
+      'attendance:checkin',
+      undefined,
+      date,
+    );
+    if (
+      child.status !== 'active' ||
+      (child.enrollmentDate && child.enrollmentDate > dateOnly(date)) ||
+      (child.withdrawalDate && child.withdrawalDate < dateOnly(date))
+    )
+      throw AppErrors.conflict('CHILD_NOT_ACTIVE');
+    const row = await this.tenantPrisma.db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM child WHERE id = ${dto.childId}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+        const existing = await tx.attendanceDay.findFirst({
+          where: { childId: dto.childId, attendanceDate: dateOnly(date) },
+        });
+        if (existing?.checkInAt) throw AppErrors.conflict('ALREADY_CHECKED_IN');
+        const active = await this.tenantPrisma.assertChild(
+          dto.childId,
+          'attendance:checkin',
+          tx,
+          date,
+        );
+        if (active.status !== 'active') throw AppErrors.conflict('CHILD_NOT_ACTIVE');
+        const group = await tx.groupAssignment.findFirst({
+          where: { childId: dto.childId, ...effectiveOn(date) },
+        });
+        const data = {
+          tenantId: ctx.tenantId,
+          branchId: child.branchId,
+          childId: dto.childId,
+          groupId: group?.groupId,
+          attendanceDate: dateOnly(date),
+          status: 'present',
+          billable: true,
+          checkInAt: at,
+          checkInBy: ctx.userId,
+          checkInNote: dto.note,
+          healthObservation: dto.healthObservation,
+        };
+        const result = existing
+          ? await tx.attendanceDay.update({
+              where: { id: existing.id },
+              data,
+              include: { child: this.childSelect },
+            })
+          : await tx.attendanceDay.create({ data, include: { child: this.childSelect } });
+        const resolution = await this.billing.recalculate(ctx, child.id, dateOnly(date), tx);
+        if (existing || resolution.status === 'manual_required')
+          await tx.attendanceCorrection.create({
+            data: {
+              tenantId: ctx.tenantId,
+              attendanceDayId: result.id,
+              field: 'status',
+              oldValue: existing?.status ?? '',
+              newValue: 'present',
+              reason: 'Actual arrival recorded by staff',
+              correctedBy: ctx.userId,
+              billingResolution: resolution.status,
+            },
+          });
+        return result;
+      },
+      { timeout: 60000 },
+    );
+    void this.notifyGuardians(
+      child.id,
       'child_arrived',
-      { child: `${child.firstName} ${child.lastName}`, time: hhmm(at) },
+      { child: child.firstName + ' ' + child.lastName, time: hhmm(at) },
       row.id,
     );
-
     return row;
   }
 
   async checkOut(ctx: AuthContext, dto: CheckOutDto) {
-    // Must derive attendanceDate from dto.at, the same way checkIn does —
-    // using today's date unconditionally here means a backdated checkout
-    // (dto.at set to an earlier day, e.g. entering a forgotten checkout
-    // the next morning) can never find the row checkIn created under that
-    // earlier date, and fails with a confusing NOT_CHECKED_IN even though
-    // the child genuinely was checked in.
     const at = dto.at ? new Date(dto.at) : new Date();
-    const attendanceDate = dateOnly(todayInTashkent(at));
-    const row = await this.tenantPrisma.db.attendanceDay.findUnique({
-      where: {
-        tenantId_childId_attendanceDate: {
-          tenantId: ctx.tenantId,
-          childId: dto.childId,
-          attendanceDate,
-        },
-      },
-    });
-    if (!row || !row.checkInAt) throw AppErrors.conflict('NOT_CHECKED_IN');
-    if (row.checkOutAt) throw AppErrors.conflict('NOT_CHECKED_IN'); // already checked out today
-
-    const updated = await this.tenantPrisma.db.attendanceDay.update({
-      where: { id: row.id },
-      data: {
-        checkOutAt: at,
-        checkOutBy: ctx.userId,
-        checkOutNote: dto.note,
-        pickupPersonId: dto.pickupPersonId,
-      },
-    });
-
-    const [child, pickupPerson] = await Promise.all([
-      this.tenantPrisma.db.child.findUnique({
-        where: { id: dto.childId },
-        select: { firstName: true, lastName: true },
-      }),
-      dto.pickupPersonId
-        ? this.tenantPrisma.db.pickupPerson.findUnique({
-            where: { id: dto.pickupPersonId },
-            select: { fullName: true },
-          })
-        : Promise.resolve(null),
-    ]);
-
-    // Check-out triggers a parent notification asynchronously (pg-boss),
-    // never blocking this response (api-spec §7, §363).
-    if (child) {
-      void this.notifyGuardians(
-        dto.childId,
-        'child_departed',
-        {
-          child: `${child.firstName} ${child.lastName}`,
-          pickup: pickupPerson?.fullName ?? '—',
-          time: hhmm(at),
-        },
-        updated.id,
+    const date = todayInTashkent(at);
+    this.assertOperationalDate(ctx, date);
+    const child = await this.tenantPrisma.assertChild(
+      dto.childId,
+      'attendance:checkout',
+      undefined,
+      date,
+    );
+    const result = await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM child WHERE id = ${dto.childId}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+      const row = await tx.attendanceDay.findFirst({
+        where: { childId: dto.childId, attendanceDate: dateOnly(date) },
+      });
+      if (!row?.checkInAt) throw AppErrors.conflict('NOT_CHECKED_IN');
+      if (row.checkOutAt) throw AppErrors.conflict('ALREADY_CHECKED_OUT');
+      if (at < row.checkInAt) throw AppErrors.validationFailed('Checkout must be after check-in');
+      const permission = await this.authorizedPickup(
+        tx,
+        child.id,
+        at,
+        dto.pickupPersonId,
+        dto.pickupPermissionId,
       );
-    }
-
-    return updated;
+      const updated = await tx.attendanceDay.update({
+        where: { id: row.id },
+        data: {
+          checkOutAt: at,
+          checkOutBy: ctx.userId,
+          checkOutNote: dto.note,
+          pickupPersonId: permission.pickupPersonId,
+          pickupPermissionId: permission.id,
+        },
+        include: { child: this.childSelect },
+      });
+      return {
+        updated,
+        pickup: permission.pickupPerson?.fullName ?? permission.adhocFullName ?? '',
+      };
+    });
+    void this.notifyGuardians(
+      child.id,
+      'child_departed',
+      { child: child.firstName + ' ' + child.lastName, pickup: result.pickup, time: hhmm(at) },
+      result.updated.id,
+    );
+    return result.updated;
   }
 
   async setStatus(ctx: AuthContext, dto: SetAttendanceStatusDto) {
-    const child = await this.tenantPrisma.db.child.findUnique({ where: { id: dto.childId } });
-    if (!child) throw AppErrors.notFound('Child not found');
-
-    const currentGroup = await this.tenantPrisma.db.groupAssignment.findFirst({
-      where: { childId: dto.childId, effectiveTo: null },
+    const date = dto.date.slice(0, 10);
+    if (date > todayInTashkent())
+      throw AppErrors.validationFailed('Future attendance is not supported');
+    const permission = date === todayInTashkent() ? 'attendance:checkin' : 'attendance:correct';
+    const child = await this.tenantPrisma.assertChild(dto.childId, permission, undefined, date);
+    const existing = await this.tenantPrisma.db.attendanceDay.findFirst({
+      where: { childId: dto.childId, attendanceDate: dateOnly(date) },
     });
-
-    const row = await this.tenantPrisma.db.attendanceDay.upsert({
-      where: {
-        tenantId_childId_attendanceDate: {
-          tenantId: ctx.tenantId,
-          childId: dto.childId,
-          attendanceDate: dateOnly(dto.date),
-        },
+    if (existing)
+      return this.correct(ctx, existing.id, {
+        field: 'status',
+        newValue: dto.status,
+        reason: dto.reason ?? '',
+      });
+    if (date !== todayInTashkent() && (dto.reason?.trim().length ?? 0) < 10)
+      throw AppErrors.validationFailed(
+        'Historical attendance requires a reason of at least 10 characters',
+      );
+    return this.tenantPrisma.db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM child WHERE id = ${child.id}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+        const group = await tx.groupAssignment.findFirst({
+          where: { childId: child.id, ...effectiveOn(date) },
+        });
+        const row = await tx.attendanceDay.create({
+          data: {
+            tenantId: ctx.tenantId,
+            childId: child.id,
+            branchId: child.branchId,
+            groupId: group?.groupId,
+            attendanceDate: dateOnly(date),
+            status: dto.status,
+            billable: false,
+            checkInNote: dto.note,
+          },
+          include: { child: this.childSelect },
+        });
+        const resolution = await this.billing.recalculate(ctx, child.id, dateOnly(date), tx);
+        if (date !== todayInTashkent() || resolution.status === 'manual_required')
+          await tx.attendanceCorrection.create({
+            data: {
+              tenantId: ctx.tenantId,
+              attendanceDayId: row.id,
+              field: 'status',
+              oldValue: '',
+              newValue: dto.status,
+              reason: dto.reason ?? 'Attendance added after billing',
+              correctedBy: ctx.userId,
+              billingResolution: resolution.status,
+            },
+          });
+        await this.audit.log(
+          {
+            userId: ctx.userId,
+            action: 'attendance.status',
+            entityType: 'attendance_day',
+            entityId: row.id,
+            newValue: { status: dto.status, reason: dto.reason },
+          },
+          tx,
+        );
+        return row;
       },
-      create: {
-        tenantId: ctx.tenantId,
-        branchId: child.branchId,
-        childId: dto.childId,
-        groupId: currentGroup?.groupId,
-        attendanceDate: dateOnly(dto.date),
-        status: dto.status,
-        billable: !NON_BILLABLE_STATUSES.has(dto.status),
-        checkInNote: dto.note,
-      },
-      update: {
-        status: dto.status,
-        billable: !NON_BILLABLE_STATUSES.has(dto.status),
-        checkInNote: dto.note,
-      },
-    });
-
-    return row;
+      { timeout: 60000 },
+    );
   }
 
   async correct(ctx: AuthContext, id: string, dto: CorrectAttendanceDto) {
-    const row = await this.tenantPrisma.db.attendanceDay.findUnique({ where: { id } });
-    if (!row) throw AppErrors.notFound('Attendance record not found');
-
-    const oldValue = String((row as Record<string, unknown>)[dto.field] ?? '');
-    const data: Record<string, unknown> = {};
-    if (dto.field === 'checkInAt' || dto.field === 'checkOutAt') {
-      data[dto.field] = new Date(dto.newValue);
-    } else {
-      data[dto.field] = dto.newValue;
-    }
-
-    await this.tenantPrisma.db.$transaction([
-      this.tenantPrisma.db.attendanceDay.update({ where: { id }, data }),
-      this.tenantPrisma.db.attendanceCorrection.create({
-        data: {
-          tenantId: ctx.tenantId,
-          attendanceDayId: id,
-          field: dto.field,
-          oldValue,
-          newValue: dto.newValue,
-          reason: dto.reason,
-          correctedBy: ctx.userId,
-        },
-      }),
-    ]);
-
-    await this.audit.log({
-      userId: ctx.userId,
-      action: 'attendance.correct',
-      entityType: 'attendance_day',
-      entityId: id,
-      oldValue: { [dto.field]: oldValue },
-      newValue: { [dto.field]: dto.newValue, reason: dto.reason },
-    });
-
-    return this.tenantPrisma.db.attendanceDay.findUnique({ where: { id } });
+    if (dto.reason.trim().length < 10)
+      throw AppErrors.validationFailed('Correction reason must contain at least 10 characters');
+    const initial = await this.tenantPrisma.db.attendanceDay.findUnique({ where: { id } });
+    if (!initial) throw AppErrors.notFound('Attendance record not found');
+    await this.tenantPrisma.assertChild(
+      initial.childId,
+      'attendance:correct',
+      undefined,
+      initial.attendanceDate.toISOString().slice(0, 10),
+    );
+    return this.tenantPrisma.db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM child WHERE id = ${initial.childId}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+        const row = (await tx.attendanceDay.findUnique({ where: { id } }))!;
+        const data: Record<string, any> = {};
+        if (dto.field === 'status') {
+          if (
+            !['present', 'late', 'early_departure', ...NON_BILLABLE_STATUSES].includes(dto.newValue)
+          )
+            throw AppErrors.validationFailed('Invalid attendance status');
+          data.status = dto.newValue;
+          data.billable = !NON_BILLABLE_STATUSES.has(dto.newValue);
+          if (!data.billable && row.checkInAt)
+            throw AppErrors.conflict(
+              'ATTENDANCE_HAS_CHECK_IN: clear check-in and checkout before marking non-attendance',
+            );
+        } else if (dto.field === 'checkInAt' || dto.field === 'checkOutAt') {
+          const at = dto.newValue ? new Date(dto.newValue) : null;
+          if (
+            at &&
+            (!Number.isFinite(at.getTime()) ||
+              todayInTashkent(at) !== row.attendanceDate.toISOString().slice(0, 10))
+          )
+            throw AppErrors.validationFailed(
+              'Timestamp must belong to the attendance date in Asia/Tashkent',
+            );
+          data[dto.field] = at;
+          const checkIn = dto.field === 'checkInAt' ? at : row.checkInAt;
+          const checkOut = dto.field === 'checkOutAt' ? at : row.checkOutAt;
+          if (checkOut && (!checkIn || checkOut < checkIn))
+            throw AppErrors.validationFailed('Checkout requires an earlier check-in');
+          if (checkIn && NON_BILLABLE_STATUSES.has(row.status)) {
+            data.status = 'present';
+            data.billable = true;
+          }
+          if (dto.field === 'checkOutAt' && at)
+            await this.authorizedPickup(
+              tx,
+              row.childId,
+              at,
+              row.pickupPersonId ?? undefined,
+              row.pickupPermissionId ?? undefined,
+            );
+        } else {
+          const permission = await this.authorizedPickup(
+            tx,
+            row.childId,
+            row.checkOutAt ?? new Date(row.attendanceDate.getTime() + 36000000),
+            dto.newValue,
+          );
+          data.pickupPersonId = permission.pickupPersonId;
+          data.pickupPermissionId = permission.id;
+        }
+        const updated = await tx.attendanceDay.update({
+          where: { id },
+          data,
+          include: { child: this.childSelect },
+        });
+        const resolution = await this.billing.recalculate(ctx, row.childId, row.attendanceDate, tx);
+        const oldValue = String((row as any)[dto.field] ?? '');
+        await tx.attendanceCorrection.create({
+          data: {
+            tenantId: ctx.tenantId,
+            attendanceDayId: id,
+            field: dto.field,
+            oldValue,
+            newValue: dto.newValue,
+            reason: dto.reason,
+            correctedBy: ctx.userId,
+            billingResolution: resolution.status,
+          },
+        });
+        await this.audit.log(
+          {
+            userId: ctx.userId,
+            action: 'attendance.correct',
+            entityType: 'attendance_day',
+            entityId: id,
+            oldValue: { [dto.field]: oldValue },
+            newValue: { ...data, reason: dto.reason, billingResolution: resolution.status },
+          },
+          tx,
+        );
+        return updated;
+      },
+      { timeout: 60000 },
+    );
   }
 
   async corrections(filters: { from?: string; to?: string; userId?: string }) {
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = {
+      attendanceDay: { child: this.tenantPrisma.childWhere('attendance:correct') },
+    };
     if (filters.userId) where.correctedBy = filters.userId;
     if (filters.from || filters.to) {
-      where.correctedAt = {
-        ...(filters.from && { gte: new Date(filters.from) }),
-        ...(filters.to && { lte: new Date(filters.to) }),
-      };
+      where.correctedAt = timestampRange(filters.from, filters.to);
     }
     return this.tenantPrisma.db.attendanceCorrection.findMany({
       where,
@@ -434,7 +631,6 @@ export class AttendanceService {
         attendanceDay: { select: { attendanceDate: true, child: this.childSelect } },
       },
       orderBy: { correctedAt: 'desc' },
-      take: 200,
     });
   }
 }

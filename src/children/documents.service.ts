@@ -12,7 +12,8 @@ export class DocumentsService {
     private readonly audit: AuditService,
   ) {}
 
-  list(childId: string) {
+  async list(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'child:read');
     return this.tenantPrisma.db.childDocument.findMany({
       where: { childId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -20,6 +21,7 @@ export class DocumentsService {
   }
 
   async create(ctx: AuthContext, childId: string, dto: CreateChildDocumentDto) {
+    await this.tenantPrisma.assertChild(childId, 'child:update');
     const doc = await this.tenantPrisma.db.childDocument.create({
       data: {
         tenantId: this.tenantPrisma.tenantId,
@@ -44,6 +46,7 @@ export class DocumentsService {
   }
 
   async update(ctx: AuthContext, childId: string, docId: string, dto: UpdateChildDocumentDto) {
+    await this.tenantPrisma.assertChild(childId, 'child:update');
     const doc = await this.tenantPrisma.db.childDocument.findFirst({
       where: { id: docId, childId },
     });
@@ -72,6 +75,7 @@ export class DocumentsService {
   }
 
   async verify(ctx: AuthContext, childId: string, docId: string) {
+    await this.tenantPrisma.assertChild(childId, 'child:update');
     const doc = await this.tenantPrisma.db.childDocument.findFirst({
       where: { id: docId, childId },
     });
@@ -97,7 +101,11 @@ export class DocumentsService {
     const now = new Date();
     const until = new Date(now.getTime() + withinDays * 86_400_000);
     return this.tenantPrisma.db.childDocument.findMany({
-      where: { deletedAt: null, expiryDate: { not: null, gte: now, lte: until } },
+      where: {
+        deletedAt: null,
+        child: this.tenantPrisma.childWhere('child:read'),
+        expiryDate: { not: null, gte: now, lte: until },
+      },
       include: { child: { select: { firstName: true, lastName: true } } },
       orderBy: { expiryDate: 'asc' },
     });

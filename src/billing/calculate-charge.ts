@@ -43,15 +43,39 @@ export function calculateCharge(input: ChargeInput, rules: BillingRules): Charge
   let amount = input.baseTiyin;
   trace.push({ step: 'base', amount, note: input.kind });
 
+  const applyDiscounts = () => {
+    if (!rules.discount.appliesTo.includes(input.kind)) return;
+    for (const phase of rules.discount.order) {
+      if (phase === 'fixed') {
+        const total =
+          rules.discount.multipleFixed === 'largest_only'
+            ? input.fixedDiscountsTiyin.reduce((a, b) => (b > a ? b : a), 0n)
+            : input.fixedDiscountsTiyin.reduce((a, b) => a + b, 0n);
+        amount = amount > total ? amount - total : 0n;
+      } else if (rules.discount.multiplePercent === 'compound') {
+        for (const bp of input.percentDiscountsBp)
+          amount -= divRound(amount * BigInt(bp), 10000n, rules.rounding.mode);
+      } else {
+        const bp = Math.min(
+          input.percentDiscountsBp.reduce((a, b) => a + b, 0),
+          10000,
+        );
+        amount -= divRound(amount * BigInt(bp), 10000n, rules.rounding.mode);
+      }
+      trace.push({ step: `discount_${phase}`, amount });
+    }
+  };
+  if (rules.discount.applyBeforeAttendance) applyDiscounts();
+  const attendanceBase = amount;
   // --- 2/3. attendance factor
-  if (mode === 'per_attended_day') {
+  if (mode !== 'flat_monthly' && !input.forceFullTariff) {
     const { billableDays, attendedDays } = input;
 
     if (billableDays === 0) {
       amount = 0n;
       trace.push({ step: 'attendance', amount, note: 'no billable days in period' });
     } else {
-      let days = attendedDays;
+      let days = mode === 'per_working_day' ? (input.workingDays ?? billableDays) : attendedDays;
       if (rules.attendance.capAtFullTariff && days > billableDays) days = billableDays;
 
       amount = divRound(amount * BigInt(days), BigInt(billableDays), rules.rounding.mode);
@@ -63,10 +87,10 @@ export function calculateCharge(input: ChargeInput, rules: BillingRules): Charge
       });
     }
 
-    if (attendedDays === 0) {
+    if (attendedDays === 0 && mode === 'per_attended_day') {
       switch (rules.attendance.noAttendanceBehaviour) {
         case 'full_tariff':
-          amount = input.baseTiyin;
+          amount = attendanceBase;
           break;
         case 'min_charge':
           amount = BigInt(rules.attendance.minChargeTiyin);
@@ -79,34 +103,7 @@ export function calculateCharge(input: ChargeInput, rules: BillingRules): Charge
   }
 
   // --- 4/5. discounts, in configured order
-  const discountable = rules.discount.appliesTo.includes(input.kind);
-  if (discountable) {
-    for (const phase of rules.discount.order) {
-      // ["fixed", "percent"]
-
-      if (phase === 'fixed') {
-        const total =
-          rules.discount.multipleFixed === 'largest_only'
-            ? input.fixedDiscountsTiyin.reduce((a, b) => (b > a ? b : a), 0n)
-            : input.fixedDiscountsTiyin.reduce((a, b) => a + b, 0n);
-        amount -= total;
-        trace.push({ step: 'discount_fixed', amount, note: `-${total}` });
-      }
-
-      if (phase === 'percent') {
-        if (rules.discount.multiplePercent === 'compound') {
-          for (const bp of input.percentDiscountsBp) {
-            amount -= divRound(amount * BigInt(bp), 10_000n, rules.rounding.mode);
-          }
-        } else {
-          const totalBp = input.percentDiscountsBp.reduce((a, b) => a + b, 0);
-          const capped = Math.min(totalBp, 10_000); // never exceed 100%
-          amount -= divRound(amount * BigInt(capped), 10_000n, rules.rounding.mode);
-        }
-        trace.push({ step: 'discount_percent', amount });
-      }
-    }
-  }
+  if (!rules.discount.applyBeforeAttendance) applyDiscounts();
 
   // --- 6. floor
   const floor = BigInt(rules.discount.floorTiyin);

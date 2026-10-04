@@ -10,6 +10,7 @@ import { STORAGE } from '../storage/storage.module';
 import { StorageDriver, buildObjectKey } from '../storage/storage-driver.interface';
 import { ReportsService } from './reports.service';
 import { REPORT_REGISTRY } from './report-registry';
+import { captureReportAccess } from './report-access';
 import { buildWorkbookBuffer } from './xlsx-export';
 import { buildReportPdfBuffer } from './pdf-export';
 import { EXPORT_GENERATE_QUEUE, ExportJobData } from './export-job.constants';
@@ -79,8 +80,11 @@ export class ExportWorkerService implements OnApplicationBootstrap {
         branchIds,
         ownGroupIds,
         perms,
+        await this.permissionResolver.permissionBranches(exportJob.createdBy),
       );
 
+      fakeRequest.authContext = authContext;
+      const access = captureReportAccess(authContext, exportJob.reportKey);
       const params = (exportJob.params as Record<string, string | undefined> | null) ?? {};
       const result = await definition.run(reportsService, authContext, params);
 
@@ -101,6 +105,7 @@ export class ExportWorkerService implements OnApplicationBootstrap {
           mimeType: mime,
           sizeBytes: BigInt(buffer.length),
           entityType: 'export_job',
+          entityId: exportJob.id,
           uploadedBy: exportJob.createdBy,
         },
       });
@@ -109,6 +114,7 @@ export class ExportWorkerService implements OnApplicationBootstrap {
         where: { id: exportJob.id },
         data: {
           status: 'completed',
+          params: { ...(exportJob.params as any), __access: access } as any,
           fileId: fileRow.id,
           expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
         },

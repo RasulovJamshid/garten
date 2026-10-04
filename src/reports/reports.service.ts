@@ -1,4 +1,6 @@
+import { effectiveOn, timestampRange } from '../common/tashkent-date';
 import { Injectable } from '@nestjs/common';
+import { andWhere } from '../common/prisma-where';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { AuthContext } from '../common/auth-context';
 import { AttendanceService } from '../attendance/attendance.service';
@@ -108,17 +110,18 @@ export class ReportsService {
 
   async childrenActive(groupId?: string): Promise<ReportResult> {
     const rows = await this.tenantPrisma.db.child.findMany({
-      where: {
-        status: 'active',
-        ...(groupId ? { groupAssignment: { some: { groupId, effectiveTo: null } } } : {}),
-      },
+      where: andWhere(
+        { status: 'active', deletedAt: null },
+        this.tenantPrisma.childWhere('child:read'),
+        groupId ? { groupAssignment: { some: { groupId, ...effectiveOn() } } } : {},
+      ),
       select: {
         firstName: true,
         lastName: true,
         birthDate: true,
         enrollmentDate: true,
         groupAssignment: {
-          where: { effectiveTo: null },
+          where: { ...effectiveOn() },
           select: { childGroup: { select: { name: true } } },
         },
       },
@@ -142,6 +145,8 @@ export class ReportsService {
   async childrenEnrollments(from?: string, to?: string): Promise<ReportResult> {
     const rows = await this.tenantPrisma.db.child.findMany({
       where: {
+        deletedAt: null,
+        ...this.tenantPrisma.childWhere('child:read'),
         enrollmentDate: {
           gte: from ? dateOnly(from) : undefined,
           lte: to ? dateOnly(to) : undefined,
@@ -169,7 +174,11 @@ export class ReportsService {
     const horizon = new Date();
     horizon.setDate(horizon.getDate() + 30);
     const rows = await this.tenantPrisma.db.childDocument.findMany({
-      where: { deletedAt: null, expiryDate: { not: null, lte: horizon } },
+      where: {
+        deletedAt: null,
+        child: this.tenantPrisma.childWhere('child:read'),
+        expiryDate: { not: null, lte: horizon },
+      },
       include: { child: { select: { firstName: true, lastName: true } } },
       orderBy: { expiryDate: 'asc' },
     });
@@ -188,32 +197,46 @@ export class ReportsService {
   }
 
   async childrenMedicalAlerts(): Promise<ReportResult> {
-    const rows = await this.tenantPrisma.db.allergy.findMany({
-      where: { deletedAt: null },
-      include: { child: { select: { firstName: true, lastName: true } } },
-    });
+    const child = this.tenantPrisma.childWhere('medical:alerts');
+    const [rows, emergencyRecords] = await Promise.all([
+      this.tenantPrisma.db.allergy.findMany({
+        where: { deletedAt: null, child },
+        include: { child: { select: { firstName: true, lastName: true } } },
+      }),
+      this.tenantPrisma.db.medicalRecord.findMany({
+        where: { child, emergencyInstructions: { not: '' } },
+        include: { child: { select: { firstName: true, lastName: true } } },
+      }),
+    ]);
     return {
       columns: [
         { key: 'child', header: 'Child' },
-        { key: 'allergen', header: 'Allergen' },
+        { key: 'allergen', header: 'Alert' },
         { key: 'severity', header: 'Severity' },
         { key: 'instruction', header: 'Instruction' },
       ],
-      rows: rows.map((r) => ({
-        child: childName(r.child),
-        allergen: r.allergen,
-        severity: r.severity,
-        instruction: r.instruction ?? '',
-      })),
+      rows: [
+        ...rows.map((r) => ({
+          child: childName(r.child),
+          allergen: r.allergen,
+          severity: r.severity,
+          instruction: r.instruction ?? '',
+        })),
+        ...emergencyRecords.map((r) => ({
+          child: childName(r.child),
+          allergen: 'Emergency instructions',
+          severity: '',
+          instruction: r.emergencyInstructions ?? '',
+        })),
+      ],
     };
   }
 
   async financeCharges(periodId?: string): Promise<ReportResult> {
     const rows = await this.tenantPrisma.db.charge.findMany({
-      where: { periodId },
+      where: { periodId, child: this.tenantPrisma.childWhere('charge:read') },
       include: { child: { select: { firstName: true, lastName: true } } },
       orderBy: { issuedAt: 'desc' },
-      take: 5000,
     });
     return {
       columns: [
@@ -237,14 +260,13 @@ export class ReportsService {
     const rows = await this.tenantPrisma.db.payment.findMany({
       where: {
         method,
-        paidAt: {
-          gte: from ? dateOnly(from) : undefined,
-          lte: to ? dateOnly(to) : undefined,
-        },
+        sign: 1,
+        otherPayment: { none: { sign: -1 } },
+        child: this.tenantPrisma.childWhere('payment:read'),
+        paidAt: timestampRange(from, to),
       },
       include: { child: { select: { firstName: true, lastName: true } } },
       orderBy: { paidAt: 'desc' },
-      take: 5000,
     });
     return {
       columns: [
@@ -285,10 +307,8 @@ export class ReportsService {
   async financeDiscounts(from?: string, to?: string): Promise<ReportResult> {
     const rows = await this.tenantPrisma.db.discount.findMany({
       where: {
-        createdAt: {
-          gte: from ? dateOnly(from) : undefined,
-          lte: to ? dateOnly(to) : undefined,
-        },
+        child: this.tenantPrisma.childWhere('discount:manage'),
+        createdAt: timestampRange(from, to),
       },
       include: { child: { select: { firstName: true, lastName: true } } },
       orderBy: { createdAt: 'desc' },
@@ -315,17 +335,23 @@ export class ReportsService {
 
   /** Reversed charges + cancelled payments — the audit trail of "money that moved backwards". */
   async financeCancellations(from?: string, to?: string): Promise<ReportResult> {
-    const dateFilter = {
-      gte: from ? dateOnly(from) : undefined,
-      lte: to ? dateOnly(to) : undefined,
-    };
+    const dateFilter = timestampRange(from, to);
     const [reversedCharges, cancelledPayments] = await Promise.all([
       this.tenantPrisma.db.charge.findMany({
-        where: { sign: -1, issuedAt: dateFilter as any },
+        where: {
+          sign: -1,
+          sourceChargeId: { not: null },
+          child: this.tenantPrisma.childWhere('charge:read'),
+          issuedAt: dateFilter as any,
+        },
         include: { child: { select: { firstName: true, lastName: true } } },
       }),
       this.tenantPrisma.db.payment.findMany({
-        where: { sign: -1, paidAt: dateFilter as any },
+        where: {
+          sign: -1,
+          child: this.tenantPrisma.childWhere('payment:read'),
+          paidAt: dateFilter as any,
+        },
         include: { child: { select: { firstName: true, lastName: true } } },
       }),
     ]);

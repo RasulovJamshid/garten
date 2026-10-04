@@ -51,6 +51,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Frontend deployment script checks
+        run: |
+          for script in scripts/deploy-frontend.sh scripts/install-frontend-watcher.sh scripts/install-frontend-cron.sh; do
+            bash -n "$script"
+          done
+          python3 -m unittest discover -s test/deployment -v
+
       - name: Lint
         run: npx eslint "{src,test}/**/*.ts"
 
@@ -70,7 +77,15 @@ jobs:
         run: npm run test:e2e
 
       - name: Build
-        run: npm run build
+        run: |
+          npm run build
+          test -f dist/main.js
+
+      - name: Real background worker smoke
+        env:
+          TEST_DATABASE_ISOLATED: 'true'
+          TELEGRAM_ENABLED: 'false'
+        run: node test/runtime/worker-smoke.cjs
 
       # Only needed on PRs — on a push to main, docker-publish (below)
       # builds the same Dockerfile for real (and pushes it), so building
@@ -154,7 +169,7 @@ jobs:
             cd "${{ secrets.DEPLOY_PATH }}"
             export API_IMAGE="${{ needs.docker-publish.outputs.image }}"
             docker compose -f docker-compose.prod.yml --env-file .env.production pull api
-            docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d --no-deps api
             docker image prune -f
 
       - name: Smoke test

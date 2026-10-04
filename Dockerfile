@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl \
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
-RUN npm run build
+RUN npm run build && test -f dist/main.js
 # Separate from `npm run build`: tsconfig.build.json deliberately excludes
 # prisma/ from the main compile (nest build only emits the app), so
 # prisma/seed.ts has never had a compiled JS counterpart to run in

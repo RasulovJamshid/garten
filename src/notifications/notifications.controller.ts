@@ -24,8 +24,7 @@ export class NotificationsController {
     summary: 'Send a notification',
     description:
       'Rate-limited to 20/min/tenant (not per-user, unlike most other endpoints). Requires an ' +
-      'Idempotency-Key header for contract consistency with the other mutating endpoints — the ' +
-      "real dedup guarantee comes from NotificationsService's own dedup_key, not this header.",
+      'Idempotency-Key header. Reusing a key returns the same notifications; changing its payload returns 409.',
   })
   @Post('send')
   @RequirePermissions('notification:send')
@@ -41,17 +40,13 @@ export class NotificationsController {
     },
   })
   send(@Body() dto: SendNotificationDto, @Headers('idempotency-key') idempotencyKey?: string) {
-    // See NotificationsService.insertDeduped: the dedup_key is what
-    // actually makes retries safe, not this header — required here only
-    // to keep the contract consistent with the other mutating financial
-    // endpoints (api-spec §9).
     if (!idempotencyKey) {
       throw new BadRequestException({
         code: 'VALIDATION_FAILED',
         message: 'Idempotency-Key header is required',
       });
     }
-    return this.notifications.send(dto);
+    return this.notifications.send(dto, idempotencyKey);
   }
 
   @ApiOperation({

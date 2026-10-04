@@ -15,6 +15,17 @@ export class GuardiansService {
     private readonly audit: AuditService,
   ) {}
 
+  private scope(permission: string) {
+    const ctx = this.tenantPrisma.context;
+    if (ctx.scopeFor(permission) === 'all') return {};
+    return {
+      OR: [
+        { createdBy: ctx.userId },
+        { childGuardian: { some: { child: this.tenantPrisma.childWhere(permission) } } },
+      ],
+    };
+  }
+
   list(filters: { q?: string; phone?: string }) {
     const where: Record<string, unknown> = { deletedAt: null };
     if (filters.phone) where.phone = normalizePhone(filters.phone);
@@ -24,12 +35,15 @@ export class GuardiansService {
         { phone: { contains: filters.q } },
       ];
     }
-    return this.tenantPrisma.db.guardian.findMany({ where, orderBy: { fullName: 'asc' } });
+    return this.tenantPrisma.db.guardian.findMany({
+      where: { AND: [where, this.scope('guardian:read')] },
+      orderBy: { fullName: 'asc' },
+    });
   }
 
-  async findOneOrThrow(id: string) {
+  async findOneOrThrow(id: string, permission = 'guardian:read') {
     const guardian = await this.tenantPrisma.db.guardian.findFirst({
-      where: { id, deletedAt: null },
+      where: { AND: [{ id, deletedAt: null }, this.scope(permission)] },
     });
     if (!guardian) throw AppErrors.notFound('Guardian not found');
     return guardian;
@@ -44,7 +58,10 @@ export class GuardiansService {
     const phone = normalizePhone(dto.phone);
     const existing = await this.tenantPrisma.db.guardian.findFirst({ where: { phone } });
     if (existing) {
-      throw AppErrors.duplicate('A guardian with this phone already exists', existing);
+      const visible = await this.tenantPrisma.db.guardian.findFirst({
+        where: { AND: [{ id: existing.id }, this.scope('guardian:manage')] },
+      });
+      throw AppErrors.duplicate('A guardian with this phone already exists', visible ?? undefined);
     }
 
     const guardian = await this.tenantPrisma.db.guardian.create({
@@ -74,14 +91,14 @@ export class GuardiansService {
   }
 
   async update(ctx: AuthContext, id: string, dto: UpdateGuardianDto) {
-    const before = await this.findOneOrThrow(id);
+    const before = await this.findOneOrThrow(id, 'guardian:manage');
     const phone = dto.phone ? normalizePhone(dto.phone) : undefined;
 
     if (phone && phone !== before.phone) {
       const clash = await this.tenantPrisma.db.guardian.findFirst({
         where: { phone, id: { not: id } },
       });
-      if (clash) throw AppErrors.duplicate('Another guardian already uses this phone', clash);
+      if (clash) throw AppErrors.duplicate('Another guardian already uses this phone');
     }
 
     const updated = await this.tenantPrisma.db.guardian.update({
@@ -104,12 +121,13 @@ export class GuardiansService {
   async childrenOf(id: string) {
     await this.findOneOrThrow(id);
     return this.tenantPrisma.db.childGuardian.findMany({
-      where: { guardianId: id },
+      where: { guardianId: id, child: this.tenantPrisma.childWhere('guardian:read') },
       include: { child: { select: { id: true, firstName: true, lastName: true, status: true } } },
     });
   }
 
-  guardiansOfChild(childId: string) {
+  async guardiansOfChild(childId: string, permission = 'child:read') {
+    await this.tenantPrisma.assertChild(childId, permission);
     return this.tenantPrisma.db.childGuardian.findMany({
       where: { childId },
       include: { guardian: true },
@@ -117,7 +135,8 @@ export class GuardiansService {
   }
 
   async link(ctx: AuthContext, childId: string, dto: LinkGuardianDto) {
-    await this.findOneOrThrow(dto.guardianId);
+    await this.tenantPrisma.assertChild(childId, 'guardian:manage');
+    await this.findOneOrThrow(dto.guardianId, 'guardian:manage');
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
       if (dto.isPrimaryContact) {
@@ -154,7 +173,7 @@ export class GuardiansService {
       newValue: { guardianId: dto.guardianId, relationship: dto.relationship },
     });
 
-    return this.guardiansOfChild(childId);
+    return this.guardiansOfChild(childId, 'guardian:manage');
   }
 
   async updateLink(
@@ -163,6 +182,7 @@ export class GuardiansService {
     guardianId: string,
     dto: UpdateGuardianLinkDto,
   ) {
+    await this.tenantPrisma.assertChild(childId, 'guardian:manage');
     const link = await this.tenantPrisma.db.childGuardian.findUnique({
       where: { childId_guardianId: { childId, guardianId } },
     });
@@ -189,10 +209,11 @@ export class GuardiansService {
       newValue: { guardianId, ...dto },
     });
 
-    return this.guardiansOfChild(childId);
+    return this.guardiansOfChild(childId, 'guardian:manage');
   }
 
   async unlink(ctx: AuthContext, childId: string, guardianId: string) {
+    await this.tenantPrisma.assertChild(childId, 'guardian:manage');
     const link = await this.tenantPrisma.db.childGuardian.findUnique({
       where: { childId_guardianId: { childId, guardianId } },
     });

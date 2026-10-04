@@ -1,5 +1,6 @@
+import { ListPaginationInterceptor } from './common/interceptors/list-pagination.interceptor';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,6 +15,7 @@ import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { ChildrenModule } from './children/children.module';
+import { LookupsModule } from './lookups/lookups.module';
 import { GuardiansModule } from './guardians/guardians.module';
 import { GroupsModule } from './groups/groups.module';
 import { AttendanceModule } from './attendance/attendance.module';
@@ -55,6 +57,7 @@ import { TraceIdMiddleware } from './common/middleware/trace-id.middleware';
     UsersModule,
     AdminModule,
     ChildrenModule,
+    LookupsModule,
     GuardiansModule,
     GroupsModule,
     AttendanceModule,
@@ -75,6 +78,7 @@ import { TraceIdMiddleware } from './common/middleware/trace-id.middleware';
     LandingModule,
   ],
   providers: [
+    { provide: APP_INTERCEPTOR, useClass: ListPaginationInterceptor },
     // Order is the contract: JwtAuthGuard sets req.user, AppThrottlerGuard
     // reads it to key per-user limits, PermissionGuard runs last. Wired
     // here, explicitly, rather than split across modules where import

@@ -142,30 +142,38 @@ export class AuthService {
       throw AppErrors.unauthenticated('Refresh token invalid or expired');
     }
 
-    await this.prisma.userSession.update({
-      where: { id: session.id },
-      data: { revokedAt: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.userSession.updateMany({
+        where: {
+          id: session.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          refreshTokenHash: hashToken(parsed.rawToken),
+        },
+        data: { revokedAt: new Date() },
+      });
+      if (consumed.count !== 1) throw AppErrors.unauthenticated('Refresh token invalid or expired');
+
+      // Deactivation must actually stop a session from renewing itself —
+      // otherwise "blocks login" (api-spec §3) only blocks *new* logins while
+      // an existing refresh cookie keeps the account alive forever.
+      const user = await tx.appUser.findUnique({
+        where: { id: session.userId },
+        select: { status: true, deletedAt: true },
+      });
+      if (!user || user.status !== 'active' || user.deletedAt) {
+        throw AppErrors.accountInactive();
+      }
+
+      const branchIds = (
+        await tx.userBranch.findMany({
+          where: { userId: session.userId },
+          select: { branchId: true },
+        })
+      ).map((b) => b.branchId);
+
+      return this.issueTokens(session.userId, session.tenantId, branchIds, meta, tx);
     });
-
-    // Deactivation must actually stop a session from renewing itself —
-    // otherwise "blocks login" (api-spec §3) only blocks *new* logins while
-    // an existing refresh cookie keeps the account alive forever.
-    const user = await this.prisma.appUser.findUnique({
-      where: { id: session.userId },
-      select: { status: true, deletedAt: true },
-    });
-    if (!user || user.status !== 'active' || user.deletedAt) {
-      throw AppErrors.accountInactive();
-    }
-
-    const branchIds = (
-      await this.prisma.userBranch.findMany({
-        where: { userId: session.userId },
-        select: { branchId: true },
-      })
-    ).map((b) => b.branchId);
-
-    return this.issueTokens(session.userId, session.tenantId, branchIds, meta);
   }
 
   async logout(cookieValue: string | undefined): Promise<void> {
@@ -181,6 +189,7 @@ export class AuthService {
     tenantId: string,
     branchIds: string[],
     meta: RequestMeta,
+    db: any = this.prisma,
   ): Promise<TokenPair> {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, tid: tenantId, bid: branchIds },
@@ -191,7 +200,7 @@ export class AuthService {
     const refreshTtlMs = parseDurationMs(this.config.get('JWT_REFRESH_TTL'));
     const expiresAt = new Date(Date.now() + refreshTtlMs);
 
-    const session = await this.prisma.userSession.create({
+    const session = await db.userSession.create({
       data: {
         tenantId,
         userId,
@@ -299,13 +308,20 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwords.hash(newPassword);
-    await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({ where: { token }, data: { usedAt: new Date() } }),
-      this.prisma.appUser.update({
+    await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: { token, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      });
+      if (consumed.count !== 1) throw AppErrors.validationFailed('Invalid or expired reset code');
+      await tx.appUser.update({
         where: { id: row.userId },
         data: { passwordHash, failedAttempts: 0, lockedUntil: null },
-      }),
-    ]);
-    await this.revokeAllSessions(row.userId);
+      });
+      await tx.userSession.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
   }
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
@@ -7,6 +8,8 @@ import { AuthContext } from '../common/auth-context';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { buildReceiptPdfBuffer, ReceiptData } from './receipt-pdf';
+import { timestampRange, todayInTashkent } from '../common/tashkent-date';
+import { allocateCredit } from './allocate-credit';
 
 @Injectable()
 export class PaymentsService {
@@ -25,22 +28,27 @@ export class PaymentsService {
     method?: string;
     recordedBy?: string;
   }) {
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { child: this.tenantPrisma.childWhere('payment:read') };
     if (filters.childId) where.childId = filters.childId;
     if (filters.method) where.method = filters.method;
     if (filters.recordedBy) where.recordedBy = filters.recordedBy;
     if (filters.from || filters.to) {
-      where.paidAt = {
-        ...(filters.from && { gte: new Date(filters.from) }),
-        ...(filters.to && { lte: new Date(filters.to) }),
-      };
+      where.paidAt = timestampRange(filters.from, filters.to);
     }
-    return this.tenantPrisma.db.payment.findMany({ where, orderBy: { paidAt: 'desc' }, take: 500 });
+    return this.tenantPrisma.db.payment.findMany({
+      where,
+      orderBy: [{ paidAt: 'desc' }, { id: 'desc' }],
+      include: {
+        child: { select: { id: true, firstName: true, lastName: true } },
+        guardian: { select: { id: true, fullName: true } },
+        otherPayment: { select: { id: true } },
+      },
+    });
   }
 
-  async get(id: string) {
-    const payment = await this.tenantPrisma.db.payment.findUnique({
-      where: { id },
+  async get(id: string, permission = 'payment:read') {
+    const payment = await this.tenantPrisma.db.payment.findFirst({
+      where: { id, child: this.tenantPrisma.childWhere(permission) },
       include: { paymentAllocation: { include: { charge: true } } },
     });
     if (!payment) throw AppErrors.notFound('Payment not found');
@@ -55,21 +63,82 @@ export class PaymentsService {
    * payment instead of creating a second one.
    */
   async create(ctx: AuthContext, dto: CreatePaymentDto, idempotencyKey: string) {
+    const requestHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          childId: dto.childId,
+          payerGuardianId: dto.payerGuardianId ?? null,
+          amountTiyin: BigInt(dto.amountTiyin).toString(),
+          method: dto.method,
+          paidAt: new Date(dto.paidAt).toISOString(),
+          receiptNo: dto.receiptNo ?? null,
+          bankRef: dto.bankRef ?? null,
+          attachmentFileId: dto.attachmentFileId ?? null,
+          note: dto.note ?? null,
+          allocations:
+            dto.allocations
+              ?.map((a) => ({
+                chargeId: a.chargeId,
+                amountTiyin: BigInt(a.amountTiyin).toString(),
+              }))
+              .sort((a, b) => a.chargeId.localeCompare(b.chargeId)) ?? null,
+        }),
+      )
+      .digest('hex');
     const existing = await this.tenantPrisma.db.payment.findFirst({
       where: { idempotencyKey },
     });
-    if (existing) return this.get(existing.id);
+    if (existing) {
+      if (existing.requestHash && existing.requestHash !== requestHash)
+        throw AppErrors.conflict('IDEMPOTENCY_CONFLICT: request payload differs');
+      if (
+        existing.childId !== dto.childId ||
+        existing.amountTiyin !== BigInt(dto.amountTiyin) ||
+        existing.method !== dto.method
+      )
+        throw AppErrors.conflict('IDEMPOTENCY_CONFLICT: key was used for another payment');
+      return this.get(existing.id, 'payment:create');
+    }
 
-    const child = await this.tenantPrisma.db.child.findUnique({ where: { id: dto.childId } });
+    const child = await this.tenantPrisma.assertChild(dto.childId, 'payment:create');
     if (!child) throw AppErrors.notFound('Child not found');
 
     const amountTiyin = BigInt(dto.amountTiyin);
+    if (amountTiyin <= 0n) throw AppErrors.validationFailed('Payment must be positive');
+    if (
+      dto.payerGuardianId &&
+      !(await this.tenantPrisma.db.childGuardian.findFirst({
+        where: { childId: dto.childId, guardianId: dto.payerGuardianId },
+      }))
+    )
+      throw AppErrors.notFound('Payer is not linked to this child');
     const tenantId = this.tenantPrisma.tenantId;
 
     let payment;
     try {
       payment = await this.tenantPrisma.db.$transaction(
         async (tx) => {
+          await tx.$queryRaw`SELECT id FROM child WHERE id = ${dto.childId}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE`;
+          const year = Number(todayInTashkent(new Date(dto.paidAt)).slice(0, 4));
+          const counters = dto.receiptNo
+            ? []
+            : await tx.$queryRaw<
+                { value: bigint }[]
+              >`INSERT INTO receipt_counter(tenant_id, year, value) VALUES (${tenantId}::uuid, ${year}, 1) ON CONFLICT (tenant_id, year) DO UPDATE SET value = receipt_counter.value + 1 RETURNING value`;
+          const setting = await tx.setting.findUnique({ where: { tenantId } });
+          const format = setting?.receiptNumberFormat ?? '{year}-{seq}';
+          const receiptNo =
+            dto.receiptNo ??
+            format
+              .replace(/\{YYYY\}|\{year\}|YYYY/g, String(year))
+              .replace(/\{SEQ:(\d+)\}|\{seq\}|\{number\}|\{n\}/g, (_match, width) =>
+                String(counters[0].value).padStart(Math.min(Number(width ?? 6), 20), '0'),
+              );
+          if (
+            !dto.receiptNo &&
+            (!/\{SEQ:\d+\}|\{seq\}|\{number\}|\{n\}/.test(format) || /[{}]/.test(receiptNo))
+          )
+            throw AppErrors.validationFailed('Invalid receiptNumberFormat setting');
           const created = await tx.payment.create({
             data: {
               tenantId,
@@ -79,12 +148,13 @@ export class PaymentsService {
               amountTiyin,
               sign: 1,
               method: dto.method,
-              receiptNo: dto.receiptNo,
+              receiptNo,
               bankRef: dto.bankRef,
               paidAt: new Date(dto.paidAt),
               attachmentFileId: dto.attachmentFileId,
               note: dto.note,
               idempotencyKey,
+              requestHash,
               recordedBy: ctx.userId,
             },
           });
@@ -99,9 +169,19 @@ export class PaymentsService {
               dto.allocations,
             );
           } else {
-            await this.allocateFifo(tx, tenantId, created.id, dto.childId, amountTiyin);
+            await allocateCredit(tx, tenantId, dto.childId);
           }
 
+          await this.audit.log(
+            {
+              userId: ctx.userId,
+              action: 'payment.create',
+              entityType: 'payment',
+              entityId: created.id,
+              newValue: { childId: dto.childId, amountTiyin: dto.amountTiyin, method: dto.method },
+            },
+            tx,
+          );
           return created;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -120,7 +200,9 @@ export class PaymentsService {
       // this transaction never committed.
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
-        (e.code === 'P2034' || e.code === 'P2002')
+        (e.code === 'P2034' ||
+          e.code === 'P2002' ||
+          (e.code === 'P2010' && ['40001', '40P01'].includes(String(e.meta?.code))))
       ) {
         throw AppErrors.conflict(
           'CONCURRENT_PAYMENT: a concurrent payment for this child is being processed, please retry',
@@ -128,14 +210,6 @@ export class PaymentsService {
       }
       throw e;
     }
-
-    await this.audit.log({
-      userId: ctx.userId,
-      action: 'payment.create',
-      entityType: 'payment',
-      entityId: payment.id,
-      newValue: { childId: dto.childId, amountTiyin: dto.amountTiyin, method: dto.method },
-    });
 
     // Never send inside the request that triggered it (§4) — queue only,
     // and never let a notification problem fail a recorded payment.
@@ -147,7 +221,7 @@ export class PaymentsService {
       payment.receiptNo,
     );
 
-    return this.get(payment.id);
+    return this.get(payment.id, 'payment:create');
   }
 
   private async notifyPayer(
@@ -214,6 +288,7 @@ export class PaymentsService {
       await tx.$queryRaw`SELECT id FROM charge WHERE id = ${alloc.chargeId}::uuid FOR UPDATE`;
       const outstanding = await this.chargeOutstanding(tx, tenantId, alloc.chargeId);
       const amount = BigInt(alloc.amountTiyin);
+      if (amount <= 0n) throw AppErrors.validationFailed('Allocation must be positive');
       if (amount > outstanding) {
         throw AppErrors.validationFailed(
           `ALLOCATION_EXCEEDS_CHARGE: charge ${alloc.chargeId} has only ${outstanding} outstanding`,
@@ -227,122 +302,56 @@ export class PaymentsService {
   }
 
   private async chargeOutstanding(tx: any, tenantId: string, chargeId: string): Promise<bigint> {
-    // A funding payment's OWN `sign` is always +1 — cancelling it creates a
-    // SEPARATE reversal payment row, it doesn't flip the original's sign.
-    // So "is this allocation still good" means "does no payment exist with
-    // source_payment_id = this allocation's payment_id", not "sign = 1".
-    const rows = await tx.$queryRaw<{ remaining: unknown }[]>`
-      SELECT c.amount_tiyin - COALESCE(SUM(pa.amount_tiyin) FILTER (
-        WHERE NOT EXISTS (SELECT 1 FROM payment rp WHERE rp.source_payment_id = pa.payment_id)
-      ), 0) AS remaining
-      FROM charge c
-      LEFT JOIN payment_allocation pa ON pa.charge_id = c.id
-      WHERE c.id = ${chargeId}::uuid AND c.tenant_id = ${tenantId}::uuid AND c.sign = 1
-        AND NOT EXISTS (SELECT 1 FROM charge r WHERE r.source_charge_id = c.id)
-      GROUP BY c.id, c.amount_tiyin
-    `;
-    // Postgres promotes BIGINT - SUM(BIGINT) to NUMERIC, which Prisma
-    // returns as a Decimal, not a native bigint (see debts.service.ts's
-    // toBigInt for the same issue) — normalize before any caller does
-    // bigint arithmetic on it.
-    const remaining = rows[0]?.remaining;
-    return remaining === null || remaining === undefined ? 0n : BigInt(remaining.toString());
-  }
-
-  private async allocateFifo(
-    tx: any,
-    tenantId: string,
-    paymentId: string,
-    childId: string,
-    paymentAmount: bigint,
-  ): Promise<void> {
-    // Step 1: lock every open charge row for this child — no aggregates
-    // here, since Postgres forbids FOR UPDATE combined with GROUP BY.
-    // This is what stops a concurrent payment from allocating against the
-    // same charge twice. `NOT EXISTS (... source_charge_id ...)` excludes
-    // any charge that has since been reversed — a reversed charge no
-    // longer represents real debt and must not receive new payments.
-    const lockedCharges = await tx.$queryRaw<{ id: string; amount_tiyin: bigint }[]>`
-      SELECT id, amount_tiyin FROM charge c
-      WHERE child_id = ${childId}::uuid AND tenant_id = ${tenantId}::uuid AND sign = 1
-        AND NOT EXISTS (SELECT 1 FROM charge r WHERE r.source_charge_id = c.id)
-      ORDER BY issued_at ASC
-      FOR UPDATE
-    `;
-    if (lockedCharges.length === 0) return;
-
-    // Step 2: how much of each locked charge is already allocated. A
-    // funding payment's own `sign` is always +1 — cancelling it creates a
-    // SEPARATE reversal payment row, it doesn't flip the original's sign
-    // — so an allocation only still counts if no payment exists whose
-    // source_payment_id points back at the payment that funded it.
-    const existingAllocations = await tx.paymentAllocation.findMany({
-      where: { chargeId: { in: lockedCharges.map((c: { id: string }) => c.id) } },
-      include: { payment: { select: { otherPayment: { select: { id: true } } } } },
-    });
-    const allocatedByCharge = new Map<string, bigint>();
-    for (const a of existingAllocations as {
-      chargeId: string;
-      amountTiyin: bigint;
-      payment: { otherPayment: { id: string }[] };
-    }[]) {
-      if (a.payment.otherPayment.length > 0) continue; // funding payment was cancelled
-      const prev = allocatedByCharge.get(a.chargeId) ?? 0n;
-      allocatedByCharge.set(a.chargeId, prev + a.amountTiyin);
-    }
-
-    let remaining = paymentAmount;
-    for (const charge of lockedCharges) {
-      if (remaining <= 0n) break;
-      const chargeRemaining = charge.amount_tiyin - (allocatedByCharge.get(charge.id) ?? 0n);
-      if (chargeRemaining <= 0n) continue;
-
-      const amount = remaining < chargeRemaining ? remaining : chargeRemaining;
-      await tx.paymentAllocation.create({
-        data: { tenantId, paymentId, chargeId: charge.id, amountTiyin: amount },
-      });
-      remaining -= amount;
-    }
-    // remaining > 0 stays unallocated = advance credit, auto-applied by the next billing run.
+    const rows =
+      await tx.$queryRaw`SELECT outstanding_tiyin FROM v_charge_outstanding WHERE tenant_id = ${tenantId}::uuid AND charge_id = ${chargeId}::uuid`;
+    return BigInt(String(rows[0]?.outstanding_tiyin ?? 0));
   }
 
   /** Never UPDATE, never DELETE — cancellation is a new sign=-1 row (01-stage1-plan.md §3.4). */
   async cancel(ctx: AuthContext, id: string, reason: string) {
-    const original = await this.tenantPrisma.db.payment.findUnique({ where: { id } });
-    if (!original) throw AppErrors.notFound('Payment not found');
-    if (original.sign === -1) throw AppErrors.validationFailed('Cannot cancel a cancellation');
+    if (!reason.trim()) throw AppErrors.validationFailed('Cancellation requires a reason');
+    return this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM payment WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid FOR UPDATE`;
+      const original = await tx.payment.findUnique({ where: { id } });
+      if (!original) throw AppErrors.notFound('Payment not found');
+      await this.tenantPrisma.assertChild(original.childId, 'payment:cancel', tx);
+      if (original.sign === -1) throw AppErrors.validationFailed('Cannot cancel a cancellation');
 
-    const existingCancellation = await this.tenantPrisma.db.payment.findFirst({
-      where: { sourcePaymentId: id },
+      const existingCancellation = await tx.payment.findFirst({
+        where: { sourcePaymentId: id },
+      });
+      if (existingCancellation) throw AppErrors.conflict('ALREADY_CANCELLED');
+
+      const reversal = await tx.payment.create({
+        data: {
+          tenantId: this.tenantPrisma.tenantId,
+          branchId: original.branchId,
+          childId: original.childId,
+          payerGuardianId: original.payerGuardianId,
+          amountTiyin: original.amountTiyin,
+          sign: -1,
+          method: original.method,
+          sourcePaymentId: id,
+          paidAt: new Date(),
+          cancelReason: reason,
+          recordedBy: ctx.userId,
+        },
+      });
+
+      await allocateCredit(tx, ctx.tenantId, original.childId);
+      await this.audit.log(
+        {
+          userId: ctx.userId,
+          action: 'payment.cancel',
+          entityType: 'payment',
+          entityId: id,
+          newValue: { reversalId: reversal.id, reason },
+        },
+        tx,
+      );
+
+      return reversal;
     });
-    if (existingCancellation) throw AppErrors.conflict('This payment was already cancelled');
-
-    const reversal = await this.tenantPrisma.db.payment.create({
-      data: {
-        tenantId: this.tenantPrisma.tenantId,
-        branchId: original.branchId,
-        childId: original.childId,
-        payerGuardianId: original.payerGuardianId,
-        amountTiyin: original.amountTiyin,
-        sign: -1,
-        method: original.method,
-        sourcePaymentId: id,
-        paidAt: new Date(),
-        cancelReason: reason,
-        recordedBy: ctx.userId,
-      },
-    });
-
-    await this.audit.log({
-      userId: ctx.userId,
-      action: 'payment.cancel',
-      entityType: 'payment',
-      entityId: id,
-      oldValue: { amountTiyin: original.amountTiyin.toString() },
-      newValue: { reversalId: reversal.id, reason },
-    });
-
-    return reversal;
   }
 
   private async receiptFields(id: string): Promise<ReceiptData> {
@@ -368,14 +377,20 @@ export class PaymentsService {
 
   async receiptHtml(id: string): Promise<string> {
     const data = await this.receiptFields(id);
+    const escape = (value: unknown) =>
+      String(value).replace(
+        /[&<>"']/g,
+        (character) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!,
+      );
     const rows = data.allocations
-      .map((a) => `<tr><td>${a.chargeKind}</td><td>${a.amountTiyin}</td></tr>`)
+      .map((a) => `<tr><td>${escape(a.chargeKind)}</td><td>${a.amountTiyin}</td></tr>`)
       .join('');
 
     return `<!doctype html><html><body>
-      <h1>${data.kindergartenName}</h1>
-      <p>Receipt: ${data.receiptNo}</p>
-      <p>Child: ${data.childName}</p>
+      <h1>${escape(data.kindergartenName)}</h1>
+      <p>Receipt: ${escape(data.receiptNo)}</p>
+      <p>Child: ${escape(data.childName)}</p>
       <p>Date: ${data.paidAt.toISOString()}</p>
       <p>Amount: ${data.amountTiyin} tiyin</p>
       <table><thead><tr><th>Charge</th><th>Allocated</th></tr></thead><tbody>${rows}</tbody></table>

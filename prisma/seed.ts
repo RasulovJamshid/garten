@@ -5,105 +5,10 @@
  */
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { PERMISSION_CATALOG, PermissionKey } from '../src/rbac/permission-catalog';
+import { PERMISSION_CATALOG } from '../src/rbac/permission-catalog';
+import { ROLE_GRANTS } from '../src/rbac/default-role-grants';
 
 const prisma = new PrismaClient();
-
-type Grant = { key: PermissionKey; scope: 'all' | 'branch' | 'own_group' | 'today' | 'self' };
-
-const ALL_GRANTS: Grant[] = PERMISSION_CATALOG.map((p) => ({ key: p.key, scope: 'all' }));
-
-// Default grants for the seeded system roles (01-stage1-plan.md §5.6).
-// Fully editable afterwards via the roles API once it exists — these are
-// starting templates, not hardcoded policy.
-const ROLE_GRANTS: Record<string, Grant[]> = {
-  owner: ALL_GRANTS,
-
-  director: PERMISSION_CATALOG.filter(
-    (p) => !['period:reopen', 'role:manage:sensitive'].includes(p.key),
-  ).map((p) => ({ key: p.key, scope: 'all' })),
-
-  administrator: [
-    { key: 'child:read', scope: 'all' },
-    { key: 'child:create', scope: 'all' },
-    { key: 'child:update', scope: 'all' },
-    { key: 'child:status', scope: 'all' },
-    { key: 'group:read', scope: 'all' },
-    { key: 'group:manage', scope: 'all' },
-    { key: 'guardian:read', scope: 'all' },
-    { key: 'guardian:manage', scope: 'all' },
-    { key: 'consent:read', scope: 'all' },
-    { key: 'consent:manage', scope: 'all' },
-    { key: 'user:manage', scope: 'all' },
-    { key: 'role:manage', scope: 'all' },
-    { key: 'settings:manage', scope: 'all' },
-    // Both halves: an administrator already pushes announcements to every
-    // parent, so publishing the website is not a step up in blast radius.
-    // The manage/publish split earns its keep for a tenant-defined
-    // "content editor" role that should draft but not go live.
-    { key: 'landing:manage', scope: 'all' },
-    { key: 'landing:publish', scope: 'all' },
-    { key: 'branch:manage', scope: 'all' },
-    { key: 'holiday:manage', scope: 'all' },
-    { key: 'announcement:manage', scope: 'all' },
-    { key: 'notification:send', scope: 'all' },
-    { key: 'notification_template:manage', scope: 'all' },
-    { key: 'report:read', scope: 'all' },
-    { key: 'dashboard:read', scope: 'all' },
-    { key: 'file:read', scope: 'all' },
-    { key: 'file:manage', scope: 'all' },
-  ],
-
-  accountant: [
-    { key: 'child:read', scope: 'branch' },
-    { key: 'guardian:read', scope: 'branch' },
-    { key: 'tariff:manage', scope: 'all' },
-    { key: 'charge:read', scope: 'all' },
-    { key: 'charge:generate', scope: 'all' },
-    { key: 'charge:reverse', scope: 'all' },
-    { key: 'payment:read', scope: 'all' },
-    { key: 'payment:create', scope: 'all' },
-    { key: 'payment:cancel', scope: 'all' },
-    { key: 'discount:manage', scope: 'all' },
-    { key: 'period:close', scope: 'all' },
-    { key: 'debt:read', scope: 'all' },
-    { key: 'billing_rules:manage', scope: 'all' },
-    { key: 'expense:read', scope: 'all' },
-    { key: 'expense:manage', scope: 'all' },
-    { key: 'report:read', scope: 'all' },
-    { key: 'dashboard:read', scope: 'all' },
-    { key: 'import:manage', scope: 'all' },
-    { key: 'file:read', scope: 'branch' },
-  ],
-
-  teacher: [
-    { key: 'child:read', scope: 'own_group' },
-    { key: 'medical:alerts', scope: 'own_group' },
-    { key: 'attendance:read', scope: 'own_group' },
-    { key: 'attendance:checkin', scope: 'own_group' },
-    { key: 'attendance:checkout', scope: 'own_group' },
-    { key: 'pickup:read', scope: 'own_group' },
-    { key: 'file:read', scope: 'own_group' },
-  ],
-
-  reception: [
-    { key: 'child:read', scope: 'branch' },
-    { key: 'guardian:read', scope: 'branch' },
-    { key: 'attendance:read', scope: 'today' },
-    { key: 'attendance:checkin', scope: 'today' },
-    { key: 'attendance:checkout', scope: 'today' },
-    { key: 'pickup:read', scope: 'branch' },
-    { key: 'pickup:manage', scope: 'branch' },
-    { key: 'pickup:temporary', scope: 'branch' },
-  ],
-
-  nurse: [
-    { key: 'child:read', scope: 'branch' },
-    { key: 'medical:read', scope: 'branch' },
-    { key: 'medical:write', scope: 'branch' },
-    { key: 'medical:alerts', scope: 'branch' },
-  ],
-};
 
 // The five templates from 05-telegram-spec.md §5 — both languages
 // mandatory, variables[] declared up front so a typo'd placeholder fails
@@ -146,7 +51,7 @@ const DEFAULT_TEMPLATES: {
   },
   {
     key: 'event_reminder',
-    bodyUz: "Eslatma: {event}. Sana: {date}, vaqt: {time}.",
+    bodyUz: 'Eslatma: {event}. Sana: {date}, vaqt: {time}.',
     bodyRu: 'Напоминание: {event}. Дата: {date}, время: {time}.',
     variables: ['event', 'date', 'time'],
   },
@@ -157,8 +62,10 @@ const DEFAULT_TEMPLATES: {
   // or diagnosis.
   {
     key: 'emergency',
-    bodyUz: "DIQQAT: {child} bilan bog'liq {message}. Iltimos, bog'cha bilan zudlik bilan bog'laning: {phone}",
-    bodyRu: 'ВНИМАНИЕ: {message} по поводу {child}. Пожалуйста, немедленно свяжитесь с детским садом: {phone}',
+    bodyUz:
+      "DIQQAT: {child} bilan bog'liq {message}. Iltimos, bog'cha bilan zudlik bilan bog'laning: {phone}",
+    bodyRu:
+      'ВНИМАНИЕ: {message} по поводу {child}. Пожалуйста, немедленно свяжитесь с детским садом: {phone}',
     variables: ['child', 'message', 'phone'],
   },
 ];
@@ -287,18 +194,10 @@ async function main() {
     update: {},
   });
 
-  // NOTE: user_role.branch_id is documented as "NULL = all branches", and
-  // 01-schema.sql even adds a partial unique index for that NULL case
-  // (uq_user_role_allbranch) — but branch_id is also part of the composite
-  // PRIMARY KEY (user_id, role_id, branch_id), and Postgres silently forces
-  // every primary-key column NOT NULL. So branch_id can never actually be
-  // NULL as delivered; the "all branches" case is unreachable. Harmless
-  // for Stage 1 (single branch, so "this branch" and "all branches" are
-  // the same set) but this needs a schema fix — drop branch_id from the
-  // PK and rely solely on uq_user_role_allbranch + a second partial unique
-  // index for the non-null case — before a second branch is added.
   await prisma.userRole.upsert({
-    where: { userId_roleId_branchId: { userId: owner.id, roleId: ownerRoleId, branchId: branch.id } },
+    where: {
+      userId_roleId_branchId: { userId: owner.id, roleId: ownerRoleId, branchId: branch.id },
+    },
     create: { userId: owner.id, roleId: ownerRoleId, branchId: branch.id },
     update: {},
   });

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   ArgumentsHost,
   Catch,
@@ -76,6 +77,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      const mappings: Record<string, [number, string, string]> = {
+        P2002: [409, 'DUPLICATE_RECORD', 'A conflicting record already exists'],
+        P2003: [422, 'INVALID_REFERENCE', 'A referenced record is unavailable'],
+        P2023: [422, 'VALIDATION_FAILED', 'Invalid identifier or field value'],
+        P2025: [404, 'NOT_FOUND', 'Record not found or changed concurrently'],
+        P2004: [409, 'CONSTRAINT_VIOLATION', 'The operation violates a business constraint'],
+        P2034: [
+          409,
+          'CONCURRENT_MODIFICATION',
+          'The record changed concurrently; reload and retry',
+        ],
+      };
+      const mapped = mappings[exception.code];
+      if (mapped) {
+        res.status(mapped[0]).json({ error: { code: mapped[1], message: mapped[2], traceId } });
+        return;
+      }
+    }
     this.logger.error(
       `Unhandled exception [traceId=${traceId}]: ${(exception as Error)?.stack ?? exception}`,
     );

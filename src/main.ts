@@ -1,3 +1,4 @@
+import { applyResponseContracts } from './common/openapi-contracts';
 import './instrument';
 import './common/bigint-json.polyfill';
 import 'reflect-metadata';
@@ -68,6 +69,7 @@ async function bootstrap() {
       .addBearerAuth()
       .build(),
   );
+  applyResponseContracts(document);
   SwaggerModule.setup('docs', app, document);
   try {
     writeFileSync('./openapi.json', JSON.stringify(document, null, 2));

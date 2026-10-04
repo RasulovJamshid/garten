@@ -13,6 +13,7 @@ import { AuthContext } from '../common/auth-context';
 import { AppConfigService } from '../config/app-config.service';
 import { TenantPrisma } from '../prisma/tenant-prisma.provider';
 import { parseDurationMs } from '../common/duration';
+import { branchLookupWhere, groupLookupWhere } from '../rbac/lookup-scope';
 
 const REFRESH_COOKIE = 'kg_refresh';
 
@@ -162,6 +163,37 @@ export class AuthController {
       roles: [...new Map(userRoles.map((ur) => [ur.role.id, ur.role])).values()],
       permissions: ctx.toJSON(),
       permissionsVersion: tenant?.permissionsVersion ?? 0,
+    };
+  }
+
+  @Get('bootstrap')
+  @ApiOperation({ summary: 'Frontend bootstrap: profile, organization and accessible lookup data' })
+  async bootstrap(@Auth() ctx: AuthContext) {
+    const profile = await this.me(ctx);
+    const groupWhere = groupLookupWhere(ctx);
+    const [organization, branches, groups] = await Promise.all([
+      this.tenantPrisma.db.tenant.findUnique({
+        where: { id: ctx.tenantId },
+        select: { id: true, name: true, code: true },
+      }),
+      this.tenantPrisma.db.branch.findMany({
+        where: branchLookupWhere(ctx),
+        select: { id: true, name: true, code: true, status: true },
+      }),
+      this.tenantPrisma.db.childGroup.findMany({
+        where: groupWhere,
+        select: { id: true, branchId: true, name: true, status: true },
+      }),
+    ]);
+    return {
+      ...profile,
+      organization,
+      branches,
+      groups,
+      ownGroupIds: ctx.ownGroupIds,
+      timezone: 'Asia/Tashkent',
+      currency: 'UZS',
+      moneyUnit: 'tiyin',
     };
   }
 

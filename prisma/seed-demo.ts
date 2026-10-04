@@ -279,6 +279,15 @@ async function main() {
         effectiveDate: enrollDate,
       });
 
+      // New children intentionally start as applicants. Promote demo children
+      // after their group assignment so they appear on attendance screens and
+      // are eligible for billing runs.
+      await api('POST', `/children/${child.id}/status`, {
+        status: 'active',
+        effectiveDate: enrollDate,
+        reason: 'Demo enrollment completed',
+      });
+
       await api('POST', `/children/${child.id}/tariffs`, {
         tariffId: monthlyTariff.id,
         effectiveFrom: enrollDate,

@@ -12,7 +12,8 @@ export class ConsentsService {
     private readonly audit: AuditService,
   ) {}
 
-  list(childId: string) {
+  async list(childId: string) {
+    await this.tenantPrisma.assertChild(childId, 'consent:read');
     return this.tenantPrisma.db.consent.findMany({
       where: { childId },
       orderBy: { grantedAt: 'desc' },
@@ -28,6 +29,11 @@ export class ConsentsService {
    * reject anyway.
    */
   async record(ctx: AuthContext, childId: string, dto: RecordConsentDto) {
+    await this.tenantPrisma.assertChild(childId, 'consent:manage');
+    const guardian = await this.tenantPrisma.db.childGuardian.findFirst({
+      where: { childId, guardianId: dto.guardianId },
+    });
+    if (!guardian) throw AppErrors.notFound('Guardian is not linked to this child');
     const child = await this.tenantPrisma.db.child.findUnique({ where: { id: childId } });
     if (!child) throw AppErrors.notFound('Child not found');
 
@@ -78,6 +84,7 @@ export class ConsentsService {
   }
 
   async revoke(ctx: AuthContext, childId: string, id: string) {
+    await this.tenantPrisma.assertChild(childId, 'consent:manage');
     const consent = await this.tenantPrisma.db.consent.findFirst({ where: { id, childId } });
     if (!consent) throw AppErrors.notFound('Consent record not found');
     if (consent.revokedAt) throw AppErrors.conflict('Consent already revoked');

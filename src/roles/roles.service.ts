@@ -142,6 +142,8 @@ export class RolesService {
 
   async clone(ctx: AuthContext, id: string, dto: CloneRoleDto) {
     const source = await this.findOneOrThrow(id);
+    for (const grant of source.rolePermission)
+      this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope);
 
     const clone = await this.tenantPrisma.db.role.create({
       data: {
@@ -177,7 +179,7 @@ export class RolesService {
     const role = await this.findOneOrThrow(id);
     this.safety.assertNotProtected(role, 'modify permissions of');
     for (const grant of dto.permissions) {
-      this.safety.assertGrantable(ctx, grant.key, grant.scope);
+      await this.safety.assertRoleGrantable(ctx, grant.key, grant.scope, id, this.tenantPrisma.db);
     }
 
     const actingUserHoldsThisRole = await this.tenantPrisma.db.userRole.findFirst({
@@ -219,7 +221,7 @@ export class RolesService {
   async grantOne(ctx: AuthContext, id: string, dto: PermissionGrantDto) {
     const role = await this.findOneOrThrow(id);
     this.safety.assertNotProtected(role, 'modify permissions of');
-    this.safety.assertGrantable(ctx, dto.key, dto.scope);
+    await this.safety.assertRoleGrantable(ctx, dto.key, dto.scope, id, this.tenantPrisma.db);
 
     await this.tenantPrisma.db.rolePermission.upsert({
       where: { roleId_permissionKey: { roleId: id, permissionKey: dto.key } },

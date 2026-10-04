@@ -51,9 +51,19 @@ export class UsersService {
   }
 
   async create(ctx: AuthContext, dto: CreateUserDto) {
+    const role = await this.tenantPrisma.db.role.findUnique({
+      where: { id: dto.roleId },
+      include: { rolePermission: true },
+    });
+    if (!role) throw AppErrors.notFound('Role not found');
+    for (const grant of role.rolePermission)
+      this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope, dto.branchIds);
+    for (const branchId of dto.branchIds)
+      await this.tenantPrisma.assertBranch(branchId, 'user:manage');
     const passwordHash = await this.passwords.hash(dto.password);
 
     const user = await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       const created = await tx.appUser.create({
         data: {
           tenantId: this.tenantPrisma.tenantId,
@@ -107,12 +117,22 @@ export class UsersService {
       data.lockedUntil = null;
     }
 
-    const updated = await this.tenantPrisma.db.appUser.update({
-      where: { id },
-      data,
-      select: USER_SUMMARY_SELECT,
-    });
+    const updated = await this.tenantPrisma.transaction(async () => {
+      const result = await this.tenantPrisma.db.appUser.update({
+        where: { id },
+        data,
+        select: USER_SUMMARY_SELECT,
+      });
 
+      if (dto.password) {
+        await this.tenantPrisma.db.userSession.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
+      return result;
+    });
     await this.audit.log({
       userId: ctx.userId,
       action: 'user.update',
@@ -138,6 +158,7 @@ export class UsersService {
    * or a role row pointing at a branch they cannot see.
    */
   private async setBranches(ctx: AuthContext, id: string, branchIds: string[]) {
+    for (const branchId of branchIds) await this.tenantPrisma.assertBranch(branchId, 'user:manage');
     const branches = await this.tenantPrisma.db.branch.findMany({
       where: { id: { in: branchIds } },
       select: { id: true },
@@ -162,6 +183,22 @@ export class UsersService {
     const removed = before.filter((b) => !branchIds.includes(b));
     const added = branchIds.filter((b) => !before.includes(b));
     if (removed.length === 0 && added.length === 0) return;
+    if (added.length) {
+      const grants = await this.tenantPrisma.db.rolePermission.findMany({
+        where: { roleId: { in: currentRoles.map((r) => r.roleId) } },
+      });
+      for (const grant of grants)
+        this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope, added);
+      const overrides = await this.tenantPrisma.db.userPermissionOverride.findMany({
+        where: {
+          userId: id,
+          effect: 'grant',
+          OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+        },
+      });
+      for (const grant of overrides)
+        this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope, added);
+    }
 
     const ownerRole = await this.tenantPrisma.db.role.findFirst({
       where: { code: 'owner' },
@@ -169,6 +206,7 @@ export class UsersService {
     });
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       if (removed.length > 0) {
         await tx.userBranch.deleteMany({ where: { userId: id, branchId: { in: removed } } });
         await tx.userRole.deleteMany({ where: { userId: id, branchId: { in: removed } } });
@@ -222,6 +260,7 @@ export class UsersService {
       });
 
       await this.tenantPrisma.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
         await tx.appUser.update({ where: { id }, data: { status: 'inactive' } });
         if (ownerRole) {
           // No-op unless `id` actually held Owner — the count simply
@@ -298,7 +337,7 @@ export class UsersService {
       where: { roleId: dto.roleId },
     });
     for (const grant of grants) {
-      this.safety.assertCanGrant(ctx, grant.permissionKey);
+      this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope);
     }
 
     const branchIds = dto.branchId
@@ -314,7 +353,12 @@ export class UsersService {
       throw AppErrors.validationFailed('User has no branch access yet — pass branchId explicitly');
     }
 
+    for (const branchId of branchIds) await this.tenantPrisma.assertBranch(branchId, 'user:manage');
+    for (const grant of grants)
+      this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope, branchIds);
+
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       for (const branchId of branchIds) {
         await tx.userRole.upsert({
           where: { userId_roleId_branchId: { userId: id, roleId: dto.roleId, branchId } },
@@ -352,15 +396,20 @@ export class UsersService {
       const grants = await this.tenantPrisma.db.rolePermission.findMany({
         where: { roleId: a.roleId },
       });
-      for (const grant of grants) this.safety.assertCanGrant(ctx, grant.permissionKey);
+      for (const grant of grants)
+        this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope);
 
       const branchIds = a.branchId ? [a.branchId] : userBranchIds;
+      for (const grant of grants)
+        this.safety.assertGrantable(ctx, grant.permissionKey, grant.scope, branchIds);
       if (branchIds.length === 0) {
         throw AppErrors.validationFailed(
           'User has no branch access yet — pass branchId explicitly',
         );
       }
       rows.push(...branchIds.map((branchId) => ({ roleId: a.roleId, branchId })));
+      for (const branchId of branchIds)
+        await this.tenantPrisma.assertBranch(branchId, 'user:manage');
     }
 
     const ownerRole = await this.tenantPrisma.db.role.findFirst({
@@ -369,6 +418,7 @@ export class UsersService {
     });
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       await tx.userRole.deleteMany({ where: { userId: id } });
       if (rows.length > 0) {
         await tx.userRole.createMany({
@@ -403,6 +453,7 @@ export class UsersService {
     if (!role) throw AppErrors.notFound('Role not found');
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       await tx.userRole.deleteMany({
         where: { userId: id, roleId, ...(branchId && { branchId }) },
       });
@@ -425,7 +476,29 @@ export class UsersService {
   async effectivePermissions(id: string) {
     await this.findOneOrThrow(id);
     const resolved = await this.resolver.resolve(id);
-    return { userId: id, permissions: Object.fromEntries(resolved) };
+    const [roles, overrides, branchIds] = await Promise.all([
+      this.tenantPrisma.db.userRole.findMany({
+        where: { userId: id },
+        include: { role: { include: { rolePermission: true } } },
+      }),
+      this.tenantPrisma.db.userPermissionOverride.findMany({ where: { userId: id } }),
+      this.resolver.branchIds(id),
+    ]);
+    return {
+      userId: id,
+      permissions: Object.fromEntries(resolved),
+      branchIds,
+      sources: roles.map((assignment) => ({
+        roleId: assignment.roleId,
+        roleCode: assignment.role.code,
+        branchId: assignment.branchId,
+        permissions: assignment.role.rolePermission.map((grant) => ({
+          key: grant.permissionKey,
+          scope: grant.scope,
+        })),
+      })),
+      overrides,
+    };
   }
 
   // --- per-user overrides --------------------------------------------------
@@ -443,12 +516,22 @@ export class UsersService {
       );
     }
     if (dto.effect === 'grant') {
-      this.safety.assertGrantable(ctx, dto.key, dto.scope);
+      const branches = await this.tenantPrisma.db.userBranch.findMany({
+        where: { userId: id },
+        select: { branchId: true },
+      });
+      this.safety.assertGrantable(
+        ctx,
+        dto.key,
+        dto.scope,
+        branches.map((b) => b.branchId),
+      );
     } else {
       this.safety.assertPermissionExists(dto.key);
     }
 
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       await tx.userPermissionOverride.upsert({
         where: { userId_permissionKey: { userId: id, permissionKey: dto.key } },
         create: {
@@ -485,6 +568,7 @@ export class UsersService {
   async removeOverride(ctx: AuthContext, id: string, key: string) {
     await this.findOneOrThrow(id);
     await this.tenantPrisma.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenant WHERE id = ${ctx.tenantId}::uuid FOR UPDATE`;
       await tx.userPermissionOverride.delete({
         where: { userId_permissionKey: { userId: id, permissionKey: key } },
       });

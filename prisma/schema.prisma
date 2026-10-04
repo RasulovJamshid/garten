@@ -106,17 +106,18 @@ model AppUser {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model AttendanceCorrection {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId        String        @map("tenant_id") @db.Uuid
-  attendanceDayId String        @map("attendance_day_id") @db.Uuid
-  field           String
-  oldValue        String?       @map("old_value")
-  newValue        String?       @map("new_value")
-  reason          String
-  correctedBy     String        @map("corrected_by") @db.Uuid
-  correctedAt     DateTime      @default(now()) @map("corrected_at") @db.Timestamptz(6)
-  attendanceDay   AttendanceDay @relation(fields: [attendanceDayId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  billingResolution String        @default("not_required") @map("billing_resolution")
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String        @map("tenant_id") @db.Uuid
+  attendanceDayId   String        @map("attendance_day_id") @db.Uuid
+  field             String
+  oldValue          String?       @map("old_value")
+  newValue          String?       @map("new_value")
+  reason            String
+  correctedBy       String        @map("corrected_by") @db.Uuid
+  correctedAt       DateTime      @default(now()) @map("corrected_at") @db.Timestamptz(6)
+  attendanceDay     AttendanceDay @relation(fields: [attendanceDayId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([tenantId, correctedAt(sort: Desc)], map: "idx_att_corr_time")
   @@map("attendance_correction")
@@ -257,33 +258,34 @@ model Branch {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Charge {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId          String              @map("tenant_id") @db.Uuid
-  branchId          String              @map("branch_id") @db.Uuid
-  childId           String              @map("child_id") @db.Uuid
-  periodId          String              @map("period_id") @db.Uuid
-  billingRunId      String?             @map("billing_run_id") @db.Uuid
-  billingRulesId    String?             @map("billing_rules_id") @db.Uuid
-  kind              String
-  amountTiyin       BigInt              @map("amount_tiyin")
-  sign              Int                 @default(1) @db.SmallInt
-  sourceChargeId    String?             @map("source_charge_id") @db.Uuid
-  tariffSnapshot    Json?               @map("tariff_snapshot")
-  calculationTrace  Json?               @map("calculation_trace")
-  description       String?
-  dueDate           DateTime?           @map("due_date") @db.Date
-  issuedAt          DateTime            @default(now()) @map("issued_at") @db.Timestamptz(6)
-  createdBy         String?             @map("created_by") @db.Uuid
-  reversalReason    String?             @map("reversal_reason")
-  billingRules      BillingRules?       @relation(fields: [billingRulesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  billingRun        BillingRun?         @relation(fields: [billingRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branch            Branch              @relation(fields: [branchId], references: [id], onUpdate: NoAction)
-  child             Child               @relation(fields: [childId], references: [id], onUpdate: NoAction)
-  accountingPeriod  AccountingPeriod    @relation(fields: [periodId], references: [id], onUpdate: NoAction)
-  charge            Charge?             @relation("chargeTocharge", fields: [sourceChargeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  otherCharge       Charge[]            @relation("chargeTocharge")
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
-  paymentAllocation PaymentAllocation[]
+  adjustmentForChargeId String?             @map("adjustment_for_charge_id") @db.Uuid
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String              @map("tenant_id") @db.Uuid
+  branchId              String              @map("branch_id") @db.Uuid
+  childId               String              @map("child_id") @db.Uuid
+  periodId              String              @map("period_id") @db.Uuid
+  billingRunId          String?             @map("billing_run_id") @db.Uuid
+  billingRulesId        String?             @map("billing_rules_id") @db.Uuid
+  kind                  String
+  amountTiyin           BigInt              @map("amount_tiyin")
+  sign                  Int                 @default(1) @db.SmallInt
+  sourceChargeId        String?             @map("source_charge_id") @db.Uuid
+  tariffSnapshot        Json?               @map("tariff_snapshot")
+  calculationTrace      Json?               @map("calculation_trace")
+  description           String?
+  dueDate               DateTime?           @map("due_date") @db.Date
+  issuedAt              DateTime            @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdBy             String?             @map("created_by") @db.Uuid
+  reversalReason        String?             @map("reversal_reason")
+  billingRules          BillingRules?       @relation(fields: [billingRulesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingRun            BillingRun?         @relation(fields: [billingRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                Branch              @relation(fields: [branchId], references: [id], onUpdate: NoAction)
+  child                 Child               @relation(fields: [childId], references: [id], onUpdate: NoAction)
+  accountingPeriod      AccountingPeriod    @relation(fields: [periodId], references: [id], onUpdate: NoAction)
+  charge                Charge?             @relation("chargeTocharge", fields: [sourceChargeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  otherCharge           Charge[]            @relation("chargeTocharge")
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
+  paymentAllocation     PaymentAllocation[]
 
   @@index([childId, issuedAt(sort: Desc)], map: "idx_charge_child")
   @@index([tenantId, periodId], map: "idx_charge_period")
@@ -834,6 +836,18 @@ model Medication {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model NotificationRequest {
+  tenantId    String   @map("tenant_id") @db.Uuid
+  key         String
+  requestHash String   @map("request_hash")
+  eventId     String   @default(dbgenerated("gen_random_uuid()")) @map("event_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([tenantId, key])
+  @@map("notification_request")
+}
+
 model Notification {
   id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId            String        @map("tenant_id") @db.Uuid
@@ -886,6 +900,7 @@ model NotificationTemplate {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Payment {
+  requestHash       String?             @map("request_hash")
   id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId          String              @map("tenant_id") @db.Uuid
   branchId          String              @map("branch_id") @db.Uuid
@@ -929,7 +944,7 @@ model PaymentAllocation {
   payment     Payment  @relation(fields: [paymentId], references: [id], onUpdate: NoAction)
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onUpdate: NoAction)
 
-  @@unique([paymentId, chargeId])
+  @@index([paymentId, chargeId], map: "idx_allocation_payment_charge")
   @@index([chargeId], map: "idx_alloc_charge")
   @@map("payment_allocation")
 }
@@ -1176,6 +1191,7 @@ model Tenant {
   lookupValue          LookupValue[]
   medicalRecord        MedicalRecord[]
   medication           Medication[]
+  notificationRequest  NotificationRequest[]
   notification         Notification[]
   notificationTemplate NotificationTemplate[]
   passwordResetToken   PasswordResetToken[]

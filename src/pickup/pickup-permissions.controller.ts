@@ -45,21 +45,19 @@ export class PickupPermissionsController {
     return this.pickup.history(childId);
   }
 
-  // Not @Public(): reception must be authenticated to call this, it's just
-  // not gated behind a *tenant-scoped* record lookup the way other
-  // endpoints are (verify() takes childId directly, no ScopeService check)
-  // — deliberately, this is the one query reception hits at the door and
-  // it must be fast and simple. Still requires pickup:read.
   @ApiOperation({
     summary: 'Verify a pickup person at the door',
     description:
       'The fast, single-purpose lookup reception uses at pickup time to confirm a given person ' +
-      'is currently authorized for a given child. Requires pickup:read; see the code comment on ' +
-      'this handler for why it skips the usual tenant-scoped record lookup other endpoints use.',
+      'is currently authorized for a given child. Validates pickup:read scope; checkout revalidates authorization.',
   })
   @Get('pickup/verify')
   @RequirePermissions('pickup:read')
-  verify(@Query('childId') childId: string, @Query('pickupPersonId') pickupPersonId: string) {
-    return this.pickup.verify(childId, pickupPersonId);
+  verify(
+    @Query('childId') childId: string,
+    @Query('pickupPersonId') pickupPersonId?: string,
+    @Query('pickupPermissionId') pickupPermissionId?: string,
+  ) {
+    return this.pickup.verify(childId, pickupPersonId, pickupPermissionId);
   }
 }

@@ -6,8 +6,10 @@ dist-seed
 .env.*
 !.env.example
 *.log
-data/files
+data
 kindergarten-docs
 test
 coverage
+mobile
+*.tsbuildinfo
 .vscode

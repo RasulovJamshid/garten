@@ -8,11 +8,12 @@ import { BillingRunsController } from './billing-runs.controller';
 import { BillingRunsService } from './billing-runs.service';
 import { ChargesController } from './charges.controller';
 import { ChargesService } from './charges.service';
+import { RecalculateBillingService } from './recalculate-billing.service';
 
 @Module({
   imports: [AuditModule, MoneyModule, NotificationsModule],
   controllers: [BillingRulesController, BillingRunsController, ChargesController],
-  providers: [BillingRulesService, BillingRunsService, ChargesService],
-  exports: [BillingRulesService, BillingRunsService, ChargesService],
+  providers: [BillingRulesService, BillingRunsService, ChargesService, RecalculateBillingService],
+  exports: [BillingRulesService, BillingRunsService, ChargesService, RecalculateBillingService],
 })
 export class BillingModule {}

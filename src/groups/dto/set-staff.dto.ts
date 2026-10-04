@@ -2,18 +2,18 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional, IsUUID } from 'class-validator';
 
 export class SetStaffDto {
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsUUID()
-  mainTeacherId?: string;
+  mainTeacherId?: string | null;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsUUID()
-  assistantTeacherId?: string;
+  assistantTeacherId?: string | null;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsUUID()
-  nurseId?: string;
+  nurseId?: string | null;
 }

@@ -129,7 +129,7 @@ export class DebtReminderService implements OnApplicationBootstrap {
             amount: (Number(amountTiyin) / 100).toFixed(2),
             due: due ? due.toISOString().slice(0, 10) : '—',
           },
-          entityId: `debt-reminder:${weekStamp}`,
+          entityId: `debt-reminder:${row.child_id}:${weekStamp}`,
         });
       } catch (e) {
         this.logger.warn(
