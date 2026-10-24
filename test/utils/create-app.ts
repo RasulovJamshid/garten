@@ -1,5 +1,6 @@
+import { createValidationPipe } from '../../src/common/validation-pipe';
 import '../../src/common/bigint-json.polyfill';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../../src/app.module';
@@ -32,14 +33,7 @@ export async function createTestApp(): Promise<{ app: INestApplication; prefix: 
   app.use(cookieParser());
   const prefix = config.get('API_PREFIX').replace(/^\//, '');
   app.setGlobalPrefix(prefix);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
+  app.useGlobalPipes(createValidationPipe());
   await app.init();
   return { app, prefix: `/${prefix}` };
 }

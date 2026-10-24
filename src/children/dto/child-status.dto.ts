@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsString, Matches, MinLength } from 'class-validator';
 
 const STATUSES = [
   'applicant',
@@ -17,11 +17,12 @@ export class ChildStatusDto {
   status!: (typeof STATUSES)[number];
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveDate!: string;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
+  @ApiProperty()
   @IsString()
-  reason?: string;
+  @MinLength(1)
+  @Matches(/\S/)
+  reason!: string;
 }

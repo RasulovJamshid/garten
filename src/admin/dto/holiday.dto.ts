@@ -8,7 +8,7 @@ export class CreateHolidayDto {
   branchId?: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   holidayDate!: string;
 
   @ApiProperty()

@@ -18,12 +18,12 @@ export class CreateDiscountDto {
   value!: string | number;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validFrom!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validTo?: string;
 
   @ApiProperty()

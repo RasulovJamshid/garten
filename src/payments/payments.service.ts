@@ -35,7 +35,7 @@ export class PaymentsService {
     if (filters.from || filters.to) {
       where.paidAt = timestampRange(filters.from, filters.to);
     }
-    return this.tenantPrisma.db.payment.findMany({
+    const payments = await this.tenantPrisma.db.payment.findMany({
       where,
       orderBy: [{ paidAt: 'desc' }, { id: 'desc' }],
       include: {
@@ -44,6 +44,15 @@ export class PaymentsService {
         otherPayment: { select: { id: true } },
       },
     });
+    const recorders = await this.tenantPrisma.db.appUser.findMany({
+      where: { id: { in: [...new Set(payments.map((payment) => payment.recordedBy))] } },
+      select: { id: true, fullName: true },
+    });
+    const names = new Map(recorders.map((user) => [user.id, user.fullName]));
+    return payments.map((payment) => ({
+      ...payment,
+      recordedByName: names.get(payment.recordedBy) ?? null,
+    }));
   }
 
   async get(id: string, permission = 'payment:read') {

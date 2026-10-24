@@ -42,12 +42,12 @@ export class MedicationDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validFrom?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validTo?: string;
 
   @ApiProperty({ required: false })

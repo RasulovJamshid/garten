@@ -20,7 +20,7 @@ export class CreateChildDto {
   middleName?: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   birthDate!: string;
 
   @ApiProperty({ required: false, enum: ['male', 'female'] })
@@ -35,7 +35,7 @@ export class CreateChildDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   enrollmentDate?: string;
 
   @ApiProperty({ required: false })

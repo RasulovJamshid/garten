@@ -3,7 +3,7 @@ import { IsDateString, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'c
 
 export class CreateBillingRulesDto {
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveFrom!: string;
 
   @ApiProperty({ description: 'Full BillingRules config — see billing-rules.types.ts' })

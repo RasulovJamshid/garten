@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-24",
+  "environment": "Fresh isolated PostgreSQL database on loopback; synthetic records only",
+  "repositories": [
+    "D:/Projects/garten-management",
+    "D:/Projects/alishax"
+  ],
+  "checks": {
+    "backendUnit": {
+      "passed": 96,
+      "log": "data/flow-audit-2026-10-24/backend-unit-final.log"
+    },
+    "backendIntegration": {
+      "passed": 116,
+      "log": "data/flow-audit-2026-10-24/backend-e2e-final.log",
+      "latestFinanceAndPermissionsRerun": {
+        "passed": 26,
+        "log": "data/flow-audit-2026-10-24/finance-api-fixed.log"
+      }
+    },
+    "web": {
+      "passed": 50,
+      "log": "data/flow-audit-2026-10-24/web-tests-final-all.log",
+      "latestFormRerun": {
+        "passed": 7,
+        "log": "data/flow-audit-2026-10-24/web-submit-tests-final.log"
+      }
+    },
+    "mobile": {
+      "passed": 84,
+      "log": "data/flow-audit-2026-10-24/mobile-tests-final.log",
+      "operationFormsRendered": 197,
+      "locales": [
+        "uz",
+        "ru"
+      ],
+      "previewsGenerated": 31
+    },
+    "realWorkers": {
+      "passed": true,
+      "verified": [
+        "internal notifications",
+        "XLSX",
+        "PDF",
+        "local file storage",
+        "downloads",
+        "expired exports"
+      ],
+      "log": "data/flow-audit-2026-10-24/worker-smoke-final.log"
+    },
+    "staticChecks": [
+      "backend build and lint",
+      "web build, typecheck and zero-warning lint",
+      "Dart analyze: no issues",
+      "mobile contract, localization and workflow generation checks"
+    ],
+    "contractConsistency": {
+      "passed": true,
+      "generationLog": "data/flow-audit-2026-10-24/contracts-final-synchronized.log",
+      "buildLog": "data/flow-audit-2026-10-24/backend-build-contract-synchronized.log",
+      "testLog": "data/flow-audit-2026-10-24/backend-contract-tests-final.log"
+    }
+  },
+  "coreLifecycle": [
+    "empty tenant",
+    "invalid child creation leaves no record",
+    "create and duplicate-check guardian",
+    "link guardian",
+    "create and assign group",
+    "activate child with reason",
+    "medical data and document verification",
+    "consent and revocation",
+    "check in and prevent duplicate check-in",
+    "reject unauthorized pickup",
+    "verify guardian and check out",
+    "create and assign tariff",
+    "preview and explain billing",
+    "commit billing once",
+    "pay exact debt",
+    "retry payment idempotently",
+    "read allocations and receipt",
+    "cancel payment and restore debt",
+    "expense payment validation and settlement",
+    "close and reopen accounting period",
+    "withdraw child and end assignments"
+  ],
+  "fixedFindings": [
+    "Calendar rollover dates were accepted by API, web and mobile",
+    "Mobile calendar crashed for out-of-range saved dates",
+    "Mobile required text and email/date-time validation was incomplete",
+    "Web payment date-time conversion used the device timezone instead of Tashkent",
+    "Server field errors lacked usable field paths and localized web messages",
+    "Reopened enrollment retained stale child and group state",
+    "Pending form submissions could duplicate or be dismissed",
+    "Guardian step accepted punctuation phone numbers and allowed leaving while linking",
+    "Optional empty group ages became zero",
+    "Child status reason appeared optional despite backend requirement",
+    "Child, parent, group and staff detail routes displayed their parent list",
+    "Parent profile did not unwrap linked child data",
+    "Charge rows lost child names, accounting periods, dates and allocated amounts",
+    "Payment reversals increased totals and canceled originals retained cancellation action",
+    "Staff role labels and login timestamps were not mapped from API responses",
+    "Reports page overflowed a 390px viewport",
+    "Mobile Russian attendance navigation wrapped awkwardly and dark navigation used a light border",
+    "Enrollment step label was hidden on narrow web layouts"
+  ],
+  "browserEvidence": "data/flow-audit-2026-10-24/browser-coverage.json",
+  "screenshots": [
+    "data/flow-audit-2026-10-24/reports-phone-ru.png",
+    "data/flow-audit-2026-10-24/charges-desktop-ru.png",
+    "data/flow-audit-2026-10-24/enrollment-completed.png",
+    "data/flow-audit-2026-10-24/attendance-cycle-completed.png",
+    "mobile/build/previews/attendance-dark-ru.png"
+  ],
+  "notVerified": [
+    "Native Android/iOS device installation, keyboard, platform file pickers and secure storage",
+    "External Telegram delivery and production storage providers",
+    "Every operation submitted end-to-end through the native mobile UI; the 197-operation result is widget/render coverage"
+  ]
+}

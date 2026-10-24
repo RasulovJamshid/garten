@@ -41,12 +41,12 @@ export class CreatePickupPersonDto {
   permissionType!: 'permanent' | 'temporary';
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validFrom!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validTo?: string;
 
   @ApiProperty({ required: false })

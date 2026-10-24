@@ -22,12 +22,12 @@ export class CreateChildDocumentDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   issueDate?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   expiryDate?: string;
 
   @ApiProperty({ required: false })
@@ -49,12 +49,12 @@ export class UpdateChildDocumentDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   issueDate?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   expiryDate?: string;
 
   @ApiProperty({ required: false })

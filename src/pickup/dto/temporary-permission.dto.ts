@@ -30,11 +30,11 @@ export class TemporaryPermissionDto {
   idDocNumber?: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validFrom!: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validTo!: string;
 
   @ApiProperty({ required: false })

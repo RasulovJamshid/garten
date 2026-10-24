@@ -160,3 +160,5 @@ childGuardians|Bolaning ota-onalari|Родители ребёнка
 noLinkedGuardians|Bu bolaga ota-ona biriktirilmagan. Bola profilida ota-onasini biriktiring.|У ребёнка нет привязанных родителей. Добавьте их в профиле ребёнка.
 noAdditionalPickup|Boshqa olib ketuvchi shaxslar belgilanmagan. Ota-onani yuqoridagi ro‘yxatdan tanlang.|Других доверенных лиц нет. Выберите родителя из списка выше.
 pickupGuardiansUnavailable|Ota-onalar ro‘yxatini yuklab bo‘lmadi. Qayta urinib ko‘ring; server yangilanishi talab qilinishi mumkin.|Не удалось загрузить родителей. Повторите попытку; возможно, требуется обновление сервера.
+
+attendanceNav|Davomat|Посещения

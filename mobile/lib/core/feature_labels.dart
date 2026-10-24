@@ -145,6 +145,7 @@ const featureLabels = <String, List<String>>{
     "Davomat tarixi va tuzatishlar",
     "История и исправления",
   ],
+  "attendanceNav": ["Davomat", "Посещения"],
   "attendanceNoMatch": [
     "Bola topilmadi. Ismni yoki tanlangan guruhni tekshiring.",
     "Ребёнок не найден. Проверьте имя или выбранную группу.",

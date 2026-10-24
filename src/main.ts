@@ -1,9 +1,9 @@
+import { createValidationPipe } from './common/validation-pipe';
 import { applyResponseContracts } from './common/openapi-contracts';
 import './instrument';
 import './common/bigint-json.polyfill';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -48,14 +48,7 @@ async function bootstrap() {
     });
   }
   app.setGlobalPrefix(config.get('API_PREFIX').replace(/^\//, ''));
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
+  app.useGlobalPipes(createValidationPipe());
 
   // Single source of truth for docs — hand-maintained OpenAPI drifts within
   // weeks. Regenerated on every boot; committed copy is checked in CI

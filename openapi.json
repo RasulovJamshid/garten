@@ -40702,6 +40702,21 @@
                             "pattern": "^-?[0-9]+$",
                             "description": "Integer serialized as a decimal string; monetary values are tiyin."
                           },
+                          "accountingPeriod": {
+                            "type": "object",
+                            "properties": {
+                              "year": {
+                                "type": "number"
+                              },
+                              "month": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "year",
+                              "month"
+                            ]
+                          },
                           "child": {
                             "type": "object",
                             "properties": {
@@ -41408,6 +41423,7 @@
                         "required": [
                           "allocatedTiyin",
                           "outstandingTiyin",
+                          "accountingPeriod",
                           "child",
                           "paymentAllocation",
                           "id",
@@ -41453,6 +41469,21 @@
                                 "type": "string",
                                 "pattern": "^-?[0-9]+$",
                                 "description": "Integer serialized as a decimal string; monetary values are tiyin."
+                              },
+                              "accountingPeriod": {
+                                "type": "object",
+                                "properties": {
+                                  "year": {
+                                    "type": "number"
+                                  },
+                                  "month": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "year",
+                                  "month"
+                                ]
                               },
                               "child": {
                                 "type": "object",
@@ -42160,6 +42191,7 @@
                             "required": [
                               "allocatedTiyin",
                               "outstandingTiyin",
+                              "accountingPeriod",
                               "child",
                               "paymentAllocation",
                               "id",
@@ -43839,6 +43871,21 @@
                             "pattern": "^-?[0-9]+$",
                             "description": "Integer serialized as a decimal string; monetary values are tiyin."
                           },
+                          "accountingPeriod": {
+                            "type": "object",
+                            "properties": {
+                              "year": {
+                                "type": "number"
+                              },
+                              "month": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "year",
+                              "month"
+                            ]
+                          },
                           "child": {
                             "type": "object",
                             "properties": {
@@ -44545,6 +44592,7 @@
                         "required": [
                           "allocatedTiyin",
                           "outstandingTiyin",
+                          "accountingPeriod",
                           "child",
                           "paymentAllocation",
                           "id",
@@ -44590,6 +44638,21 @@
                                 "type": "string",
                                 "pattern": "^-?[0-9]+$",
                                 "description": "Integer serialized as a decimal string; monetary values are tiyin."
+                              },
+                              "accountingPeriod": {
+                                "type": "object",
+                                "properties": {
+                                  "year": {
+                                    "type": "number"
+                                  },
+                                  "month": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "year",
+                                  "month"
+                                ]
                               },
                               "child": {
                                 "type": "object",
@@ -45297,6 +45360,7 @@
                             "required": [
                               "allocatedTiyin",
                               "outstandingTiyin",
+                              "accountingPeriod",
                               "child",
                               "paymentAllocation",
                               "id",
@@ -50674,6 +50738,10 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "recordedByName": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "child": {
                             "type": "object",
                             "properties": {
@@ -50795,6 +50863,7 @@
                           }
                         },
                         "required": [
+                          "recordedByName",
                           "child",
                           "guardian",
                           "otherPayment",
@@ -50832,6 +50901,10 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "recordedByName": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "child": {
                                 "type": "object",
                                 "properties": {
@@ -50953,6 +51026,7 @@
                               }
                             },
                             "required": [
+                              "recordedByName",
                               "child",
                               "guardian",
                               "otherPayment",
@@ -64018,7 +64092,8 @@
         },
         "required": [
           "status",
-          "effectiveDate"
+          "effectiveDate",
+          "reason"
         ]
       },
       "CreateChildDocumentDto": {

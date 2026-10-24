@@ -772,11 +772,16 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
                 onPressed: !widget.enabled
                     ? null
                     : () async {
+                        final parsed = DateTime.tryParse(controller.text);
+                        final initial =
+                            parsed == null ||
+                                parsed.year < 1900 ||
+                                parsed.year >= 2200
+                            ? DateTime.parse(today())
+                            : parsed;
                         final chosen = await showDatePicker(
                           context: context,
-                          initialDate:
-                              DateTime.tryParse(controller.text) ??
-                              DateTime.parse(today()),
+                          initialDate: initial,
                           firstDate: DateTime(1900),
                           lastDate: DateTime(2200),
                         );
@@ -823,7 +828,7 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
                 : null;
           }
           final v = parseField(widget.name, text, schema);
-          if (date && DateTime.tryParse(v.toString()) == null) {
+          if (date && !validCalendarDate(v.toString().split('T').first)) {
             return tr(context, 'invalid');
           }
           return validateField(v, schema, required: widget.required) == null

@@ -11,7 +11,7 @@ export class TransferChildDto {
   toGroupId!: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveDate!: string;
 
   @ApiProperty({ required: false })

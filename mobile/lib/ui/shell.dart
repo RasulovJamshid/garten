@@ -139,8 +139,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           bottomNavigationBar: wide
               ? null
               : DecoratedBox(
-                  decoration: const BoxDecoration(
-                    border: Border(top: BorderSide(color: Color(0xFFE5E9F0))),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
                   ),
                   child: NavigationBar(
                     selectedIndex: index,
@@ -150,7 +152,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         .map(
                           (t) => NavigationDestination(
                             icon: Icon(t.$2),
-                            label: tr(context, t.$1),
+                            label: tr(
+                              context,
+                              t.$1 == 'attendance' ? 'attendanceNav' : t.$1,
+                            ),
+                            tooltip: tr(context, t.$1),
                           ),
                         )
                         .toList(),

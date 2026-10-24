@@ -9,7 +9,7 @@ export class SetAttendanceStatusDto {
   childId!: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   date!: string;
 
   @ApiProperty({ enum: NON_ATTENDING_STATUSES })

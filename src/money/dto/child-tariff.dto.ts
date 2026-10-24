@@ -7,17 +7,17 @@ export class AssignChildTariffDto {
   tariffId!: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveFrom!: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveTo?: string;
 }
 
 export class EndChildTariffDto {
   @ApiProperty({ format: 'date' })
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveTo!: string;
 }

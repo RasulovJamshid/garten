@@ -22,6 +22,6 @@ export class PermissionOverrideDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   validUntil?: string;
 }

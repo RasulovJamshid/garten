@@ -1996,12 +1996,15 @@
             "format": "date"
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
           }
         },
         "required": [
           "status",
-          "effectiveDate"
+          "effectiveDate",
+          "reason"
         ]
       },
       "multipart": false,

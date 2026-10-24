@@ -7,6 +7,6 @@ export class AssignChildDto {
   childId!: string;
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   effectiveDate!: string;
 }

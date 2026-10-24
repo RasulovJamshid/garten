@@ -43,7 +43,7 @@ export class CreatePaymentDto {
   method!: (typeof METHODS)[number];
 
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   paidAt!: string;
 
   @ApiProperty({ required: false })

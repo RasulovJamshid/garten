@@ -32,6 +32,7 @@ export class ChargesService {
     const charges = await this.tenantPrisma.db.charge.findMany({
       where,
       include: {
+        accountingPeriod: { select: { year: true, month: true } },
         child: { select: { id: true, firstName: true, lastName: true } },
         paymentAllocation: {
           include: { payment: { select: { otherPayment: { select: { id: true } } } } },

@@ -146,8 +146,16 @@ dynamic parseField(String name, String text, Json schema) {
   }
 }
 
+bool validCalendarDate(String value) {
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return false;
+  final date = DateTime.tryParse(value);
+  return date != null && date.toIso8601String().substring(0, 10) == value;
+}
+
 String? validateField(dynamic value, Json schema, {bool required = false}) {
-  if (value == null || value == '') return required ? 'required' : null;
+  if (value == null || (value is String && value.trim().isEmpty)) {
+    return required ? 'required' : null;
+  }
   if (schema['enum'] is List && !(schema['enum'] as List).contains(value)) {
     return 'invalid';
   }
@@ -175,8 +183,19 @@ String? validateField(dynamic value, Json schema, {bool required = false}) {
         ).hasMatch(value)) {
       return 'invalid';
     }
-    if (['date', 'date-time'].contains(schema['format']) &&
-        DateTime.tryParse(value) == null) {
+    if (schema['format'] == 'email' &&
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value)) {
+      return 'invalid';
+    }
+    if (schema['format'] == 'date' && !validCalendarDate(value)) {
+      return 'invalid';
+    }
+    if (schema['format'] == 'date-time' &&
+        (!RegExp(
+              r'^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$',
+            ).hasMatch(value) ||
+            !validCalendarDate(value.substring(0, 10)) ||
+            DateTime.tryParse(value) == null)) {
       return 'invalid';
     }
   }

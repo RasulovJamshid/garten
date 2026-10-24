@@ -19,5 +19,8 @@ export class CreateAdjustmentDto {
   @Matches(/^[1-9]\d*$/)
   amountTiyin!: string;
   @ApiProperty() @IsString() @MinLength(10) reason!: string;
-  @ApiProperty({ required: false, format: 'date' }) @IsOptional() @IsDateString() dueDate?: string;
+  @ApiProperty({ required: false, format: 'date' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  dueDate?: string;
 }

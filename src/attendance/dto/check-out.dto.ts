@@ -34,7 +34,7 @@ export class CheckOutDto {
 
   @ApiProperty({ required: false, description: 'Defaults to now' })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   at?: string;
 
   @ApiProperty({ required: false })

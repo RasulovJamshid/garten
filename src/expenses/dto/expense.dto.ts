@@ -66,7 +66,7 @@ export class CreateExpenseDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   dueDate?: string;
 
   @ApiProperty({ required: false })
@@ -93,7 +93,7 @@ export class UpdateExpenseDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
   dueDate?: string;
 
   @ApiProperty({ required: false })
@@ -104,7 +104,7 @@ export class UpdateExpenseDto {
 
 export class PayExpenseDto {
   @ApiProperty()
-  @IsDateString()
+  @IsDateString({ strict: true })
   paidAt!: string;
 
   @ApiProperty({ description: 'Integer tiyin as a string' })
