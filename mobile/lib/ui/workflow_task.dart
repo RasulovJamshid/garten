@@ -5,8 +5,11 @@ import '../core/session.dart';
 import '../core/strings.dart';
 import '../core/workflows.dart';
 import 'common.dart';
+import 'publish_review.dart';
+import 'form_feedback.dart';
 import 'features.dart';
 import 'groups.dart';
+import 'payment.dart';
 import 'schema_form.dart';
 
 Future<void> openWorkflowTask(
@@ -19,9 +22,16 @@ Future<void> openWorkflowTask(
   await Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) =>
-          op.id == 'GroupsController_setStaff' &&
-              AppScope.of(context).can('group:read')
+      builder: (_) => op.id == 'LandingController_publish'
+          ? PublishReviewPage(operation: op)
+          : op.id == 'PaymentsController_create'
+          ? PaymentPage(
+              initialChild: contextValues['childId'] == record['id']
+                  ? record
+                  : null,
+            )
+          : op.id == 'GroupsController_setStaff' &&
+                AppScope.of(context).can('group:read')
           ? GroupStaffPage(
               group:
                   contextValues['groupId'] != null &&
@@ -67,6 +77,10 @@ class _WorkflowTaskPageState extends State<WorkflowTaskPage> {
   Json get selectionSchema {
     final fields = object(op.parameterSchema('path')['properties']);
     final required = (op.parameterSchema('path')['required'] as List? ?? []);
+    if (op.id == 'ImportsController_commit') {
+      fields['importJobId'] = {'type': 'string', 'format': 'uuid'};
+      required.add('importJobId');
+    }
     for (final p in op.parameters.where(
       (p) =>
           p['in'] == 'query' &&
@@ -111,8 +125,7 @@ class _WorkflowTaskPageState extends State<WorkflowTaskPage> {
   }
 
   Future<void> prepare() async {
-    if (loading ||
-        (form.currentState != null && !form.currentState!.validate())) {
+    if (loading || (form.currentState != null && !validateAndReveal(form))) {
       return;
     }
     setState(() {
@@ -121,6 +134,24 @@ class _WorkflowTaskPageState extends State<WorkflowTaskPage> {
     });
     try {
       final session = AppScope.of(context);
+      if (op.id == 'ChildrenController_create' &&
+          session.branches.length == 1) {
+        values.putIfAbsent('branchId', () => session.branches.single['id']);
+      }
+      if (op.id == 'ImportsController_commit') {
+        record = object(
+          await session.api.request('/imports/${values['importJobId']}'),
+        );
+        if (record['status'] != 'validated') {
+          if (mounted) {
+            setState(() {
+              error = tr(context, 'importNotValidated');
+              loading = false;
+            });
+          }
+          return;
+        }
+      }
       final target = op.parameters.where((p) => p['in'] == 'path').lastOrNull;
       final kind = target == null
           ? ''
@@ -268,7 +299,11 @@ class _WorkflowTaskPageState extends State<WorkflowTaskPage> {
             if (error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(errorText(context, error!)),
+                child: Text(
+                  error is String
+                      ? error as String
+                      : errorText(context, error!),
+                ),
               ),
             FilledButton.icon(
               onPressed: loading ? null : prepare,

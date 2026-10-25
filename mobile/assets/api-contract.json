@@ -1409,9 +1409,9 @@
           },
           "workingDays": {
             "description": "ISO weekdays, 1=Mon..7=Sun",
-            "type": "integer",
+            "type": "array",
             "items": {
-              "type": "number"
+              "type": "integer"
             }
           },
           "workingHours": {

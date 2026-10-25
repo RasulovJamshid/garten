@@ -236,7 +236,7 @@ class _AttendancePageState extends State<AttendancePage> {
           ),
           const SizedBox(height: 16),
           if (refreshing) const LinearProgressIndicator(),
-          if (!refreshing) ...[
+          if (!refreshing && visible.isNotEmpty) ...[
             Text(
               tr(context, filter == 'inside' ? 'pickupHelp' : 'attendanceHelp'),
             ),
@@ -251,8 +251,16 @@ class _AttendancePageState extends State<AttendancePage> {
                     context,
                     search.isNotEmpty
                         ? 'attendanceNoMatch'
+                        : rows!.isEmpty
+                        ? 'attendanceNoScopedChildren'
                         : filter == 'pending'
                         ? 'arrivalsComplete'
+                        : filter == 'inside'
+                        ? 'attendanceNobodyInside'
+                        : filter == 'left'
+                        ? 'attendanceNobodyLeft'
+                        : filter == 'away'
+                        ? 'attendanceNobodyAbsent'
                         : 'attendanceEmpty',
                   ),
                 ),

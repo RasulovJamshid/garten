@@ -7,6 +7,7 @@ import '../core/api.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
+import 'schema_form.dart' show displayValue, formLabel;
 
 String referenceTitle(BuildContext context, Json row) {
   final language = AppScope.of(context).language;
@@ -53,21 +54,104 @@ String referenceTitle(BuildContext context, Json row) {
   return tr(context, 'record');
 }
 
-String referenceSubtitle(BuildContext context, Json row) => [
-  row['phone'],
-  row['email'],
-  row['groupName'],
-  if (childName(object(row['child'])).isNotEmpty &&
-      childName(object(row['child'])) != referenceTitle(context, row))
-    childName(object(row['child'])),
-  row['receiptNo'],
-  if (row['paidAt'] != null || row['date'] != null)
-    dateText(row['paidAt'] ?? row['date']),
-  object(row['branch'])['name'],
-  if (row['birthDate'] != null) dateText(row['birthDate']),
-  if (row['amountTiyin'] != null) money(row['amountTiyin']),
-  if (row['status'] != null) tr(context, row['status'].toString()),
-].where((v) => v != null && v.toString().isNotEmpty).join(' · ');
+String referenceSubtitle(BuildContext context, Json row) {
+  final session = AppScope.of(context);
+  final details = <String>[];
+  void add(dynamic value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty &&
+        text != referenceTitle(context, row) &&
+        !details.contains(text)) {
+      details.add(text);
+    }
+  }
+
+  void field(String key, dynamic value) {
+    if (value != null && value.toString().isNotEmpty) {
+      add('${formLabel(context, key)}: ${displayValue(context, key, value)}');
+    }
+  }
+
+  add(row['phone']);
+  add(row['email']);
+  add(row['groupName'] ?? object(row['group'])['name']);
+  for (final assignment in records(
+    row['groupAssignment'] ?? row['groupAssignments'],
+  )) {
+    add(object(assignment['group'])['name']);
+  }
+  final branch =
+      row['branchName'] ??
+      object(row['branch'])['name'] ??
+      session.branches
+          .where((b) => b['id'] == row['branchId'])
+          .firstOrNull?['name'];
+  if (branch != null) field('branch', branch);
+  if (childName(object(row['child'])).isNotEmpty) {
+    add(childName(object(row['child'])));
+  }
+  final period = object(row['accountingPeriod'] ?? row['period']);
+  final year = row['billingYear'] ?? row['year'] ?? period['year'];
+  final month = row['billingMonth'] ?? row['month'] ?? period['month'];
+  if (year != null && month != null) add('$month/$year');
+  for (final key in [
+    'type',
+    'kind',
+    'channel',
+    'receiptNo',
+    'birthDate',
+    'dueDate',
+    'paidAt',
+    'date',
+    'createdAt',
+    'queuedAt',
+    'sentAt',
+    'occurredAt',
+    'issuedAt',
+  ]) {
+    field(key, row[key]);
+  }
+  if (row['amountTiyin'] != null) add(money(row['amountTiyin']));
+  for (final key in ['recipient', 'guardian', 'user', 'actor']) {
+    final related = object(row[key]);
+    if (related.isNotEmpty) add(referenceTitle(context, related));
+  }
+  for (final key in [
+    'recipientId',
+    'recipientGuardianId',
+    'recipientUserId',
+    'guardianId',
+    'userId',
+  ]) {
+    final id = row[key]?.toString();
+    final kind = ['recipientId', 'recipientGuardianId'].contains(key)
+        ? 'guardianId'
+        : key == 'recipientUserId'
+        ? 'userId'
+        : key;
+    final related = session.references[kind]?[id];
+    if (related != null) {
+      add(referenceTitle(context, related));
+    } else if (id != null) {
+      field(kind, id.length > 8 ? id.substring(0, 8) : id);
+    }
+  }
+  field('entityType', row['entityType']);
+  field('childCount', row['childCount']);
+  if (row['status'] != null) add(tr(context, row['status'].toString()));
+  // Minimal scoped lookups must not acquire extra permissions just to show context.
+  if (row['id'] != null &&
+      (childName(row).isNotEmpty ||
+          row['fullName'] == tr(context, 'selectedRecord') ||
+          details.isEmpty ||
+          row['periodId'] != null)) {
+    final id = row['registrationNumber']?.toString() ?? row['id'].toString();
+    add(
+      '${tr(context, 'recordReference')}: ${id.length > 8 ? id.substring(0, 8) : id}',
+    );
+  }
+  return details.join(' · ');
+}
 
 class ReferencePicker extends StatefulWidget {
   const ReferencePicker({
@@ -156,6 +240,11 @@ class _ReferencePickerState extends State<ReferencePicker> {
             },
           );
       var values = records(data);
+      if (widget.path == '/notification-templates') {
+        values = values
+            .map((r) => {...r, 'key': r['templateKey'] ?? r['key']})
+            .toList();
+      }
       if (widget.path == '/landing') values = records(object(data)['blocks']);
       final meta = object(object(data)['meta']);
       if (!mounted || ticket != request) return;

@@ -281,3 +281,23 @@ Pickup and attendance fixes (1.5.1):
   20261004120000_attendance_guardian_pickup via `npx prisma migrate deploy`, then
   run the updated API (the production Docker entrypoint already applies migrations).
   No production deployment or production migration was performed in this session.
+
+
+Usability fixes (1.5.3, 25 October 2026):
+- Today and the child directory share enrollment; the Children tab and directory share the same collection UI. Attendance history is available from the main tab.
+- Payment entry points share the dedicated review/recovery flow, including optional payer, receipt, bank, attachment and allocation fields. Pending requests from the former directory form remain recoverable with their original payload and key.
+- Business dates display local Tashkent time; working days use named chips, hours use time pickers, and bank/tax settings use named fields while retaining custom values.
+- Template selection handles the API templateKey and shows named variables with Uzbek/Russian message previews.
+- Lists include available branch, billing period, due date, channel, queue/event time, recipient reference and record reference. Scoped child lookups remain permission-limited; they do not provide group/birth-date details.
+- Required fields, keyboard-aware actions, field-specific removal labels, explicit discard/payment confirmations and several navigation/empty-state labels were improved.
+- Validation: 93 unit/widget tests passed, Dart analysis clean, generated contract check passed, Android debug APK built. Physical Galaxy S9 validation uses read-only navigation and unsent drafts on the live API; no business submissions, backend deployment or production data changes.
+- Follow-up audit work: guided import/publishing sequences, deeper parent-contact/report navigation, comprehensive role coverage and TalkBack/contrast testing.
+
+Usability follow-up (1.5.4, 25 October 2026):
+- Child record pages show linked parents and selectable phone numbers directly, using the existing child-read permission and endpoint.
+- Enlarged text uses a compact horizontally scrollable navigation bar with complete labels and automatic selected-tab visibility; first invalid form fields scroll into view and text inputs receive focus.
+- Write and logout confirmations name their action. Password recovery explains Telegram delivery and administrator fallback.
+- Reports default to in-app results, with separate PDF/XLSX export actions. Finance lists prioritize payments and debts.
+- Imports present template, validation and result-review steps. Commit loads the selected job and requires validated status; website publication first loads a draft review.
+- Collection empty states describe access scope and filters; attendance distinguishes an empty roster from completed arrivals.
+- Verification: 105 unit/widget tests pass, Dart analysis clean, Android debug APK built. Physical Galaxy S9 checks cover direct parent contacts, 200% text navigation, finance ordering, required-field focus with the keyboard, import steps, in-app reports and publication draft review. Device testing also corrected publication permissions, date-only display, generic child-action labels and raw empty-report output. No live business records were changed; imports, payments and publication were not submitted. Full TalkBack and contrast verification remain outstanding.

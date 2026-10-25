@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
+import 'form_feedback.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,7 +24,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> submit() async {
-    if (!form.currentState!.validate() || busy) return;
+    if (!validateAndReveal(form) || busy) return;
     setState(() {
       busy = true;
       error = null;
@@ -48,6 +49,7 @@ class _LoginPageState extends State<LoginPage> {
             child: AutofillGroup(
               child: Form(
                 key: form,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -229,11 +231,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     body: ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        if (!sent)
+        if (!sent) ...[
+          Text(tr(context, 'recoveryHelp')),
+          const SizedBox(height: 20),
           TextField(
             controller: login,
             decoration: InputDecoration(labelText: tr(context, 'username')),
           ),
+        ],
         if (sent) ...[
           Text(tr(context, 'resetSent')),
           const SizedBox(height: 20),
@@ -245,7 +250,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
           TextField(
             controller: password,
             obscureText: true,
-            decoration: InputDecoration(labelText: tr(context, 'newPassword')),
+            decoration: InputDecoration(
+              labelText: tr(context, 'newPassword'),
+              helperText: tr(context, 'passwordRecoveryLength'),
+            ),
           ),
         ],
         const SizedBox(height: 24),

@@ -34,7 +34,12 @@ function enrich(dir) {
           const number = value && Number(value.getText(source));
           const constraint = {Min: 'minimum', Max: 'maximum', MinLength: 'minLength', MaxLength: 'maxLength', ArrayMinSize: 'minItems', ArrayMaxSize: 'maxItems'}[validator];
           if (constraint && Number.isFinite(number)) field[constraint] = number;
-          if (validator === 'IsInt') field.type = 'integer';
+          if (validator === 'IsInt') {
+            if (type && ts.isArrayTypeNode(type)) {
+              field.type = 'array';
+              field.items = { ...field.items, type: 'integer' };
+            } else field.type = 'integer';
+          }
           if (validator === 'IsUUID') field.format = 'uuid';
           if (validator === 'IsEmail') field.format = 'email';
           if (validator === 'IsDateString') field.format = name.endsWith('At') ? 'date-time' : 'date';

@@ -4,7 +4,9 @@ import '../core/api.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
+import 'child_contacts.dart';
 import 'resources.dart';
+import 'reference_picker.dart';
 import 'features.dart';
 import '../core/features.dart';
 import 'workflows.dart';
@@ -134,20 +136,7 @@ class _ChildrenPageState extends State<ChildrenPage> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            subtitle: widget.lookupPermission != null
-                                ? null
-                                : Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      (child['groupName'] ??
-                                              tr(
-                                                context,
-                                                child['status']?.toString() ??
-                                                    'pending',
-                                              ))
-                                          .toString(),
-                                    ),
-                                  ),
+                            subtitle: Text(referenceSubtitle(context, child)),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
                               if (widget.select) {
@@ -314,6 +303,8 @@ class _ChildPageState extends State<ChildPage> {
                       ),
                     ),
                   ),
+                  if (session.can('child:read'))
+                    ChildContacts(childId: widget.id),
                   FutureBuilder<FeatureCatalog>(
                     future: FeatureCatalog.load(),
                     builder: (context, snapshot) => snapshot.hasData

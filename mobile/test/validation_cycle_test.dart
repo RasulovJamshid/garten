@@ -71,7 +71,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byIcon(Icons.calendar_today));
+    await tester.tap(find.byType(TextFormField));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(DatePickerDialog), findsOneWidget);

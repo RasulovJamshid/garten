@@ -10,7 +10,9 @@ import '../core/features.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
+import 'form_feedback.dart';
 import 'schema_form.dart';
+import 'notification_preview.dart';
 import 'reference_picker.dart';
 import 'reference_field.dart';
 import 'workflows.dart';
@@ -218,14 +220,15 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
   bool get frozen => pending?.submission != null;
   bool get enabled => !busy && !frozen && !recoveryFailed && !completed;
 
-  Future<void> run() async {
+  Future<void> run({String? reportFormat}) async {
     if (busy ||
         restoring ||
         recoveryFailed ||
         completed ||
-        !form.currentState!.validate()) {
+        !validateAndReveal(form)) {
       return;
     }
+    if (op.group == 'reports') queryValues['format'] = reportFormat ?? 'json';
     final session = AppScope.of(context);
     if (!op.allowed(session)) {
       setState(() => error = const ApiFailure('FORBIDDEN', 403));
@@ -238,6 +241,7 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
           frozen
               ? tr(context, 'retrySameOperation')
               : operationReview(context, pathValues, bodyValues, operation: op),
+          confirmLabel: tr(context, op.id),
         )) {
       return;
     }
@@ -393,6 +397,8 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
               context,
               tr(context, 'cancel'),
               tr(context, frozen ? 'retrySameOperation' : 'discard'),
+              confirmLabel: tr(context, 'discardChanges'),
+              cancelLabel: tr(context, 'keepEditing'),
             ) &&
             mounted) {
           setState(() => dirty = false);
@@ -416,7 +422,12 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
             ? null
             : SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    16 + MediaQuery.viewInsetsOf(context).bottom,
+                  ),
                   child: FilledButton.icon(
                     onPressed: busy
                         ? null
@@ -459,9 +470,15 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
             ? const Center(child: CircularProgressIndicator.adaptive())
             : Form(
                 key: form,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
+                    if (op.id == 'ChildrenController_create')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: Text(tr(context, 'applicantNotice')),
+                      ),
                     if (frozen)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 20),
@@ -477,6 +494,9 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
                           subtitle: Text(tr(context, 'selectedTaskRecord')),
                         ),
                       ),
+                    if (op.id == 'ImportsController_commit' &&
+                        widget.initialRecord.isNotEmpty)
+                      WorkflowRecordSummary(record: widget.initialRecord),
                     if (completed && widget.guided)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -521,11 +541,22 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
                       ExpansionTile(
                         initiallyExpanded: true,
                         title: Text(tr(context, 'filters')),
+                        childrenPadding: const EdgeInsets.only(top: 12),
                         children: [
                           SchemaObjectForm(
                             key: const ValueKey('query'),
                             referenceValues: referenceValues,
-                            schema: op.parameterSchema('query'),
+                            schema: {
+                              ...op.parameterSchema('query'),
+                              'properties': {
+                                for (final entry in object(
+                                  op.parameterSchema('query')['properties'],
+                                ).entries)
+                                  if (op.group != 'reports' ||
+                                      entry.key != 'format')
+                                    entry.key: entry.value,
+                              },
+                            },
                             suggestedFields: widget.guided
                                 ? suggestedWorkflowFields
                                 : const {},
@@ -538,6 +569,34 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
                           ),
                         ],
                       ),
+                    if (op.group == 'reports') ...[
+                      Text(tr(context, 'reportOnScreenHelp')),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final format
+                              in (object(
+                                            op.parameters
+                                                .where(
+                                                  (p) => p['name'] == 'format',
+                                                )
+                                                .firstOrNull?['schema'],
+                                          )['enum']
+                                          as List? ??
+                                      [])
+                                  .where((f) => f != 'json'))
+                            OutlinedButton.icon(
+                              onPressed: enabled
+                                  ? () => run(reportFormat: format.toString())
+                                  : null,
+                              icon: const Icon(Icons.download_outlined),
+                              label: Text(
+                                '${tr(context, 'exportReport')} ${format.toString().toUpperCase()}',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                     if (op.body.isNotEmpty)
                       SchemaObjectForm(
                         key: const ValueKey('body'),
@@ -577,12 +636,16 @@ class _FeatureOperationPageState extends State<FeatureOperationPage> {
                           dirty = true;
                         }),
                       ),
+                    if (op.id == 'NotificationsController_send')
+                      NotificationPreview(values: bodyValues),
                     if (error != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Text(
                           errorText(context, error!),
-                          style: const TextStyle(color: Colors.red),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                     if (!widget.guided)

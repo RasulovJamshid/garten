@@ -7,9 +7,13 @@ import '../core/session.dart';
 import '../core/strings.dart';
 import 'children.dart';
 import 'common.dart';
+import 'schema_form.dart';
+import 'payment_details.dart';
+import 'reference_picker.dart';
 
 class PaymentPage extends StatefulWidget {
-  const PaymentPage({super.key});
+  const PaymentPage({super.key, this.initialChild});
+  final Json? initialChild;
   @override
   State<PaymentPage> createState() => _PaymentPageState();
 }
@@ -18,11 +22,13 @@ class _PaymentPageState extends State<PaymentPage> {
   final form = GlobalKey<FormState>();
   final amount = TextEditingController(), note = TextEditingController();
   Json? child, submission;
+  Json details = {};
   String method = 'cash', key = const Uuid().v4();
   bool busy = false, restoring = true, dirty = false;
   late String storageKey;
   Object? error;
   bool initialized = false, recoveryFailed = false;
+  bool legacyRecovery = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -39,10 +45,31 @@ class _PaymentPageState extends State<PaymentPage> {
       error = null;
     });
     final session = AppScope.of(context);
+    final selectedLabel = tr(context, 'selectedRecord');
     storageKey =
         'payment:${session.api.dio.options.baseUrl}:${object(session.profile?['user'])['id']}';
     try {
-      final saved = await session.api.secrets.read(storageKey);
+      var saved = await session.api.secrets.read(storageKey);
+      legacyRecovery = false;
+      if (saved == null) {
+        final legacyKey =
+            'operation:${session.api.dio.options.baseUrl}:${object(session.profile?['user'])['id']}:PaymentsController_create';
+        final legacy = await session.api.secrets.read(legacyKey);
+        if (legacy != null) {
+          final previous = object(jsonDecode(legacy));
+          if (previous['path'] != '/payments') {
+            throw const ApiFailure('INVALID_RESPONSE');
+          }
+          final payload = object(previous['data']);
+          saved = jsonEncode({
+            'payload': payload,
+            'key': previous['key'],
+            'child': {'id': payload['childId'], 'fullName': selectedLabel},
+          });
+          storageKey = legacyKey;
+          legacyRecovery = true;
+        }
+      }
       if (saved != null) {
         final data = object(jsonDecode(saved));
         final restored = object(data['payload']);
@@ -66,6 +93,11 @@ class _PaymentPageState extends State<PaymentPage> {
           throw const ApiFailure('INVALID_RESPONSE');
         }
         submission = restored;
+        details = {
+          for (final e in restored.entries)
+            if (!['childId', 'amountTiyin', 'method', 'note'].contains(e.key))
+              e.key: e.value,
+        };
         key = restoredKey;
         child = restoredChild;
         method = restored['method'].toString();
@@ -74,7 +106,8 @@ class _PaymentPageState extends State<PaymentPage> {
         dirty = true;
       } else {
         submission = null;
-        child = null;
+        child = widget.initialChild;
+        details = {'paidAt': DateTime.now().toUtc().toIso8601String()};
         amount.clear();
         note.clear();
         method = 'cash';
@@ -107,16 +140,28 @@ class _PaymentPageState extends State<PaymentPage> {
     final payload =
         submission ??
         {
+          ...details,
           'childId': child!['id'],
           'amountTiyin': toTiyin(amount.text),
           'method': method,
-          'paidAt': DateTime.now().toUtc().toIso8601String(),
           if (note.text.trim().isNotEmpty) 'note': note.text.trim(),
         };
     if (!await confirm(
       context,
       tr(context, 'paymentReview'),
-      '${childName(child!)}\n${money(payload['amountTiyin'])}\n${tr(context, method)}',
+      [
+        childName(child!),
+        referenceSubtitle(context, child!),
+        money(payload['amountTiyin']),
+        tr(context, method),
+        displayValue(context, 'paidAt', payload['paidAt']),
+        if (payload['payerGuardianId'] != null)
+          '${tr(context, 'payerGuardianId')}: ${session.references['guardianId']?[payload['payerGuardianId']]?['fullName'] ?? payload['payerGuardianId']}',
+        if (payload['attachmentFileId'] != null)
+          tr(context, 'attachmentFileId'),
+        if (payload['note'] != null) payload['note'].toString(),
+      ].where((v) => v.isNotEmpty).join('\n'),
+      confirmLabel: tr(context, 'recordPayment'),
     )) {
       return;
     }
@@ -130,7 +175,17 @@ class _PaymentPageState extends State<PaymentPage> {
       // both the original payload and its idempotency key, including paidAt.
       await session.api.secrets.write(
         storageKey,
-        jsonEncode({'payload': payload, 'key': key, 'child': child}),
+        jsonEncode(
+          legacyRecovery
+              ? {
+                  'path': '/payments',
+                  'pathValues': <String, dynamic>{},
+                  'query': <String, dynamic>{},
+                  'data': payload,
+                  'key': key,
+                }
+              : {'payload': payload, 'key': key, 'child': child},
+        ),
       );
       submission = payload;
       await session.api.request(
@@ -181,6 +236,8 @@ class _PaymentPageState extends State<PaymentPage> {
             context,
             tr(context, 'cancel'),
             tr(context, submission == null ? 'discard' : 'paymentUncertain'),
+            confirmLabel: tr(context, 'discardChanges'),
+            cancelLabel: tr(context, 'keepEditing'),
           ) &&
           mounted) {
         setState(() => dirty = false);
@@ -209,6 +266,9 @@ class _PaymentPageState extends State<PaymentPage> {
                             : childName(child!),
                       ),
                       trailing: const Icon(Icons.chevron_right),
+                      subtitle: child == null
+                          ? null
+                          : Text(referenceSubtitle(context, child!)),
                       onTap: busy || submission != null
                           ? null
                           : () async {
@@ -224,6 +284,8 @@ class _PaymentPageState extends State<PaymentPage> {
                               if (selected != null && mounted) {
                                 setState(() {
                                   child = selected;
+                                  details.remove('payerGuardianId');
+                                  details.remove('allocations');
                                   dirty = true;
                                 });
                               }
@@ -290,6 +352,17 @@ class _PaymentPageState extends State<PaymentPage> {
                       decoration: InputDecoration(
                         labelText: tr(context, 'note'),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    SchemaObjectForm(
+                      schema: paymentDetailSchema,
+                      value: details,
+                      referenceValues: {'childId': child?['id']},
+                      enabled: !busy,
+                      onChanged: (v) => setState(() {
+                        details = v;
+                        dirty = true;
+                      }),
                     ),
                   ],
                   if (error != null)

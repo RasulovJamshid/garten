@@ -34,7 +34,12 @@ Future<void> submit(WidgetTester tester) async {
     EnginePhase.sendSemanticsUpdate,
     const Duration(seconds: 3),
   );
-  await tester.tap(find.text(translate('uz', 'confirm')));
+  final operation = tester
+      .widget<FeatureOperationPage>(find.byType(FeatureOperationPage))
+      .operation;
+  await tester.tap(
+    find.widgetWithText(TextButton, translate('uz', operation.id)),
+  );
   await tester.pumpAndSettle(
     const Duration(milliseconds: 100),
     EnginePhase.sendSemanticsUpdate,
@@ -559,12 +564,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      final export = find.text('${translate('uz', 'exportReport')} XLSX');
       await tester.scrollUntilVisible(
-        find.byType(FilledButton),
-        400,
+        export,
+        300,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.byType(FilledButton));
+      await tester.tap(export);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text(translate('uz', 'checkExport')),

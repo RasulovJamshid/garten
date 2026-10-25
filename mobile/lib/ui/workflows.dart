@@ -6,6 +6,7 @@ import '../core/session.dart';
 import '../core/strings.dart';
 import '../core/workflows.dart';
 import 'common.dart';
+import 'child_contacts.dart';
 import 'attendance.dart';
 import 'features.dart';
 import 'groups.dart';
@@ -181,11 +182,13 @@ class WorkflowSection extends StatefulWidget {
     required this.group,
     this.catalog,
     this.collectionPath,
+    this.embedded = false,
     this.title,
     this.contextValues = const {},
   });
   final String group;
   final String? collectionPath, title;
+  final bool embedded;
   final FeatureCatalog? catalog;
   final Json contextValues;
   @override
@@ -203,6 +206,7 @@ class _WorkflowSectionState extends State<WorkflowSection> {
   bool started = false, loading = false, more = false;
   String search = '';
   Timer? debounce;
+  final searchController = TextEditingController();
   WorkflowSpec get spec => workflowSpecs[widget.group]!;
   String get kind => widget.collectionPath == null
       ? spec.kind
@@ -258,6 +262,7 @@ class _WorkflowSectionState extends State<WorkflowSection> {
   @override
   void dispose() {
     debounce?.cancel();
+    searchController.dispose();
     super.dispose();
   }
 
@@ -490,6 +495,7 @@ class _WorkflowSectionState extends State<WorkflowSection> {
   @override
   Widget build(BuildContext context) {
     final taskList = tasks;
+    final stepped = ['imports', 'landing'].contains(widget.group);
     final create = taskList
         .where((o) => o.writes && !workflowDestructive(o))
         .firstOrNull;
@@ -505,9 +511,11 @@ class _WorkflowSectionState extends State<WorkflowSection> {
         )
         .toList();
     return Scaffold(
-      appBar: AppBar(
-        title: Text(formLabel(context, widget.title ?? widget.group)),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(formLabel(context, widget.title ?? widget.group)),
+            ),
       body: catalog == null
           ? error != null
                 ? FailureView(error!, initialize)
@@ -523,7 +531,15 @@ class _WorkflowSectionState extends State<WorkflowSection> {
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 16),
-                  if (create != null) ...[
+                  if (stepped)
+                    WorkflowSteps(
+                      group: widget.group,
+                      catalog: catalog!,
+                      onChanged: () {
+                        if (mounted) load();
+                      },
+                    ),
+                  if (!stepped && create != null) ...[
                     FilledButton.icon(
                       onPressed: () async {
                         await openWorkflowTask(
@@ -539,11 +555,13 @@ class _WorkflowSectionState extends State<WorkflowSection> {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  if (taskList.where((o) => o != create).isNotEmpty)
+                  if (!stepped && taskList.where((o) => o != create).isNotEmpty)
                     ExpansionTile(
                       initiallyExpanded: listing == null,
                       tilePadding: EdgeInsets.zero,
-                      title: Text(tr(context, 'sectionTasks')),
+                      title: Text(
+                        '${formLabel(context, widget.group)} · ${tr(context, 'availableTasks')}',
+                      ),
                       children: [
                         for (final op in taskList.where((o) => o != create))
                           WorkflowTaskTile(
@@ -595,6 +613,7 @@ class _WorkflowSectionState extends State<WorkflowSection> {
                       ),
                     if (canSearch)
                       TextField(
+                        controller: searchController,
                         onChanged: searchChanged,
                         decoration: InputDecoration(
                           hintText: tr(context, 'searchByName'),
@@ -629,18 +648,50 @@ class _WorkflowSectionState extends State<WorkflowSection> {
                     if (summary != null && listing != null)
                       WorkflowRecordSummary(record: object(summary)),
                     if (!loading &&
+                        (listing != null ||
+                            [
+                              'files',
+                              'imports',
+                              'exports',
+                            ].contains(widget.group)) &&
                         error == null &&
                         visible.isEmpty &&
                         summary == null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Text(
-                          tr(
-                            context,
-                            listing == null
-                                ? 'recentRecordsHint'
-                                : 'emptyWorkflowHint',
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              '${formLabel(context, widget.group)}: ${tr(context, search.isNotEmpty || filters.isNotEmpty
+                                  ? 'noFilterMatches'
+                                  : listing == null
+                                  ? 'noSessionRecords'
+                                  : 'noRecordsInScope')}',
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              tr(
+                                context,
+                                listing == null
+                                    ? 'sessionRecordsHelp'
+                                    : 'scopeRecordsHelp',
+                              ),
+                            ),
+                            if (search.isNotEmpty || filters.isNotEmpty)
+                              TextButton(
+                                onPressed: () {
+                                  debounce?.cancel();
+                                  searchController.clear();
+                                  setState(() {
+                                    search = '';
+                                    filters = {};
+                                  });
+                                  load();
+                                },
+                                child: Text(tr(context, 'resetFilters')),
+                              ),
+                          ],
                         ),
                       ),
                     for (final row in visible)
@@ -676,6 +727,76 @@ class _WorkflowSectionState extends State<WorkflowSection> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class WorkflowSteps extends StatelessWidget {
+  const WorkflowSteps({
+    super.key,
+    required this.group,
+    required this.catalog,
+    required this.onChanged,
+  });
+  final String group;
+  final FeatureCatalog catalog;
+  final VoidCallback onChanged;
+  @override
+  Widget build(BuildContext context) {
+    final steps = group == 'imports'
+        ? [
+            ('importTemplateStep', ['ImportsController_template']),
+            ('importValidateStep', ['ImportsController_validate']),
+            ('importReviewStep', ['ImportsController_get']),
+          ]
+        : [
+            (
+              'draftEditStep',
+              [
+                'LandingController_createBlock',
+                'LandingController_reorder',
+                'LandingController_updateSeo',
+              ],
+            ),
+            ('draftReviewStep', ['LandingController_publish']),
+            ('publishedHistoryStep', ['LandingController_versions']),
+          ];
+    final allowed = catalog.available(AppScope.of(context));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          if (allowed.any((o) => steps[i].$2.contains(o.id)))
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${i + 1}. ${tr(context, steps[i].$1)}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    for (final op in allowed.where(
+                      (o) => steps[i].$2.contains(o.id),
+                    ))
+                      TextButton(
+                        onPressed: () async {
+                          await openWorkflowTask(context, catalog, op);
+                          if (context.mounted) onChanged();
+                        },
+                        child: Text(tr(context, op.id)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        if (group == 'imports')
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(tr(context, 'importCommitHelp')),
+          ),
+      ],
     );
   }
 }
@@ -818,6 +939,8 @@ String workflowArea(FeatureOperation op) {
   final parts = op.path.split('/').where((p) => p.isNotEmpty).toList();
   if (parts.firstOrNull == 'children' && parts.length > 2) {
     return {
+          'history': 'childHistory',
+          'consents': 'childConsents',
           'charge-ledger': 'charges',
           'recalculate-billing': 'charges',
           'pickup-history': 'pickup',
@@ -942,6 +1065,12 @@ class _WorkflowRecordPageState extends State<WorkflowRecordPage> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 12),
+          if (widget.kind == 'childId' &&
+              AppScope.of(context).can('child:read'))
+            ChildContacts(
+              key: ValueKey(record['id']),
+              childId: record['id'].toString(),
+            ),
           WorkflowRecordActions(
             group: widget.group,
             kind: widget.kind,
@@ -1097,7 +1226,10 @@ class WorkflowOutput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (list.isEmpty) const EmptyView(),
+        if (list.isEmpty)
+          operation.group == 'reports'
+              ? Text(tr(context, 'reportNoRows'))
+              : const EmptyView(),
         for (final raw in list)
           if (raw.isNotEmpty)
             if (workflowRow(kind, raw)[workflowRecordKey(kind)] != null)
@@ -1117,8 +1249,7 @@ class WorkflowOutput extends StatelessWidget {
               )
             else
               WorkflowRecordSummary(record: raw),
-        if (list.every((r) => r.isEmpty))
-          Text(displayValue(context, '', value)),
+        if (list.isNotEmpty && list.every((r) => r.isEmpty)) const EmptyView(),
       ],
     );
   }

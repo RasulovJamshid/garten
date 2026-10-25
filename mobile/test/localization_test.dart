@@ -139,7 +139,11 @@ void main() {
       await tester.tap(find.text(translate('uz', 'phone')));
       await tester.pumpAndSettle();
       expect(value.containsKey('phone'), isTrue);
-      await tester.tap(find.byTooltip(translate('uz', 'removeField')));
+      await tester.tap(
+        find.byTooltip(
+          "${translate('uz', 'removeField')}: ${translate('uz', 'phone')}",
+        ),
+      );
       await tester.pumpAndSettle();
       expect(value.containsKey('phone'), isFalse);
       expect(value['firstName'], 'Ali');

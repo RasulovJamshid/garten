@@ -225,6 +225,9 @@ Json workflowRow(String kind, Json row) {
   if (kind == 'childId' && row['id'] == null && row['childId'] != null) {
     return {...row, 'id': row['childId']};
   }
+  if (kind == 'importJobId' && row['importJobId'] != null) {
+    return {...row, 'id': row['importJobId']};
+  }
   if (kind == 'fileId' && row['fileId'] != null) {
     return {...row, 'id': row['fileId']};
   }
@@ -414,6 +417,11 @@ const suggestedWorkflowFields = <String>{
 
 Json workflowBodySchema(FeatureOperation op, Json values, Session session) {
   final properties = {...object(op.body['properties'])};
+  if (op.group == 'settings') {
+    for (final entry in properties.entries.toList()) {
+      properties[entry.key] = {...object(entry.value), 'x-visible': true};
+    }
+  }
   if (op.group == 'roles' || op.group == 'users') {
     if (properties.containsKey('key')) {
       properties['key'] = {
@@ -433,6 +441,17 @@ Json workflowBodySchema(FeatureOperation op, Json values, Session session) {
         session.references['templateKey']?[values['templateKey']?.toString() ??
             values['key']?.toString()];
     final variables = (template?['variables'] ?? values['variables']) as List?;
+    if (variables == null) {
+      for (final key in ['data', 'sampleData']) {
+        if (properties.containsKey(key)) {
+          properties[key] = {
+            'type': 'object',
+            'properties': <String, dynamic>{},
+            'additionalProperties': false,
+          };
+        }
+      }
+    }
     if (variables != null) {
       for (final key in ['data', 'sampleData']) {
         if (properties.containsKey(key)) {

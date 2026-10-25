@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'attendance.dart';
-import 'children.dart';
+import 'adaptive_navigation.dart';
 import 'common.dart';
 import 'payment.dart';
 import 'resources.dart';
 import 'editors.dart';
 import 'features.dart';
 import 'profile.dart';
-import '../core/workflows.dart';
 import '../core/features.dart';
 import 'workflows.dart';
 
@@ -62,7 +61,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final index = tabs.indexWhere((t) => t.$1 == selected);
     final body = switch (selected) {
       'attendance' => const AttendancePage(),
-      'children' => const ChildrenPage(),
+      'children' => const WorkflowSection(group: 'children', embedded: true),
       'finance' => const FinancePage(),
       'more' => const MorePage(),
       _ => TodayPage(
@@ -99,6 +98,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ],
             ),
             actions: [
+              if (selected == 'attendance')
+                IconButton(
+                  tooltip: tr(context, 'attendanceHistory'),
+                  icon: const Icon(Icons.history),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const WorkflowSection(group: 'attendance'),
+                    ),
+                  ),
+                ),
               IconButton(
                 tooltip: tr(context, 'account'),
                 onPressed: () => setState(() => selected = 'more'),
@@ -144,23 +155,32 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       top: BorderSide(color: Theme.of(context).dividerColor),
                     ),
                   ),
-                  child: NavigationBar(
-                    selectedIndex: index,
-                    onDestinationSelected: (i) =>
-                        setState(() => selected = tabs[i].$1),
-                    destinations: tabs
-                        .map(
-                          (t) => NavigationDestination(
-                            icon: Icon(t.$2),
-                            label: tr(
-                              context,
-                              t.$1 == 'attendance' ? 'attendanceNav' : t.$1,
-                            ),
-                            tooltip: tr(context, t.$1),
-                          ),
+                  child: MediaQuery.textScalerOf(context).scale(14) > 18
+                      ? LargeTextNavigation(
+                          tabs: tabs,
+                          selected: selected,
+                          onSelected: (value) =>
+                              setState(() => selected = value),
                         )
-                        .toList(),
-                  ),
+                      : NavigationBar(
+                          selectedIndex: index,
+                          onDestinationSelected: (i) =>
+                              setState(() => selected = tabs[i].$1),
+                          destinations: tabs
+                              .map(
+                                (t) => NavigationDestination(
+                                  icon: Icon(t.$2),
+                                  label: tr(
+                                    context,
+                                    t.$1 == 'attendance'
+                                        ? 'attendanceNav'
+                                        : t.$1,
+                                  ),
+                                  tooltip: tr(context, t.$1),
+                                ),
+                              )
+                              .toList(),
+                        ),
                 ),
         );
       },
@@ -222,7 +242,7 @@ class TodayPage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             children: [
               Container(
-                padding: const EdgeInsets.all(22),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF3C57B8), Color(0xFF243B89)],
@@ -258,12 +278,12 @@ class TodayPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
                     Text(
                       session.name,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 25,
+                        fontSize: 22,
                         height: 1.3,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -.4,
@@ -287,7 +307,7 @@ class TodayPage extends StatelessWidget {
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 18,
-                    vertical: 10,
+                    vertical: 2,
                   ),
                   leading: Icon(
                     Icons.space_dashboard_outlined,
@@ -318,7 +338,7 @@ class TodayPage extends StatelessWidget {
                         child: InkWell(
                           onTap: shortcuts[i].$3,
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 128),
+                            constraints: const BoxConstraints(minHeight: 100),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -387,19 +407,29 @@ Widget action(
 ) => Card(
   child: ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    leading: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
-    ),
+    leading: MediaQuery.textScalerOf(context).scale(14) > 18
+        ? null
+        : Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.primary,
+              size: 22,
+            ),
+          ),
     title: Text(
       tr(context, title),
       style: const TextStyle(fontWeight: FontWeight.w700),
     ),
-    trailing: const Icon(Icons.chevron_right),
+    trailing: MediaQuery.textScalerOf(context).scale(14) > 18
+        ? null
+        : const Icon(Icons.chevron_right),
     onTap: onTap,
   ),
 );
@@ -433,9 +463,17 @@ class FinancePage extends StatelessWidget {
                 .toSet();
             return Column(
               children: [
-                for (final group in groups.where(
-                  (g) => workflowSpecs[g]?.category == 'moneyWork',
-                ))
+                for (final group in [
+                  'payments',
+                  'debts',
+                  'charges',
+                  'expenses',
+                  'tariffs',
+                  'discounts',
+                  'periods',
+                  'billing-rules',
+                  'billing-runs',
+                ].where(groups.contains))
                   action(
                     context,
                     featureIcon(group),
@@ -552,7 +590,12 @@ class MorePage extends StatelessWidget {
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () async {
-            if (!await confirm(context, tr(context, 'logout'), session.name)) {
+            if (!await confirm(
+              context,
+              tr(context, 'logout'),
+              session.name,
+              confirmLabel: tr(context, 'logout'),
+            )) {
               return;
             }
             try {

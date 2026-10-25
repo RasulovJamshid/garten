@@ -203,7 +203,13 @@ class PersonAvatar extends StatelessWidget {
   );
 }
 
-Future<bool> confirm(BuildContext context, String title, String body) async =>
+Future<bool> confirm(
+  BuildContext context,
+  String title,
+  String body, {
+  String? confirmLabel,
+  String? cancelLabel,
+}) async =>
     await showAdaptiveDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog.adaptive(
@@ -212,11 +218,11 @@ Future<bool> confirm(BuildContext context, String title, String body) async =>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(tr(context, 'cancel')),
+            child: Text(cancelLabel ?? tr(context, 'cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(tr(context, 'confirm')),
+            child: Text(confirmLabel ?? tr(context, 'confirm')),
           ),
         ],
       ),

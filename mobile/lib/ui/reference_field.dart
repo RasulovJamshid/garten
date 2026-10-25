@@ -132,13 +132,24 @@ class ReferenceField extends StatelessWidget {
               available ? Icons.search_rounded : Icons.link_rounded,
             ),
           ),
-          child: Text(
-            selected != null
-                ? referenceTitle(context, selected)
-                : value != null && value != ''
-                ? tr(context, 'selectedRecord')
-                : tr(context, 'tapToChoose'),
-            style: Theme.of(context).textTheme.bodyLarge,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selected != null
+                    ? referenceTitle(context, selected)
+                    : value != null && value != ''
+                    ? tr(context, 'selectedRecord')
+                    : tr(context, 'tapToChoose'),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              if (selected != null &&
+                  referenceSubtitle(context, selected).isNotEmpty)
+                Text(
+                  referenceSubtitle(context, selected),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
           ),
         ),
       ),

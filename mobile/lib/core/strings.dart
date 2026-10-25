@@ -20,6 +20,144 @@ String countText(BuildContext context, String unit, int count) {
 }
 
 const labels = <String, List<String>>{
+  'blockOrder': ['Sahifadagi tartib', 'Порядок на странице'],
+  'reportNoRows': [
+    'Tanlangan sana va filtrlar bo‘yicha yozuvlar yo‘q. Sana yoki filtrlarni o‘zgartiring.',
+    'Нет записей за выбранную дату и по заданным фильтрам. Измените дату или фильтры.',
+  ],
+  'childHistory': ['Bola tarixi', 'История ребёнка'],
+  'childConsents': ['Ota-ona roziliklari', 'Согласия родителей'],
+  "attendanceNoScopedChildren": [
+    "Bugun tanlangan guruhda sizga ochiq bolalar topilmadi. Boshqa guruhni tanlang yoki ro‘yxatni yangilang.",
+    "На сегодня в выбранной группе нет доступных вам детей. Выберите другую группу или обновите список.",
+  ],
+  "attendanceNobodyInside": [
+    "Hozir tanlangan guruhdan bog‘chada bolalar yo‘q.",
+    "Сейчас в садике нет детей из выбранной группы.",
+  ],
+  "attendanceNobodyLeft": [
+    "Bugun tanlangan guruhdan hali hech kim olib ketilmagan.",
+    "Сегодня из выбранной группы ещё никого не забрали.",
+  ],
+  "attendanceNobodyAbsent": [
+    "Bugun tanlangan guruhda yo‘qlik qayd etilmagan.",
+    "Сегодня в выбранной группе нет отметок об отсутствии.",
+  ],
+  "parentContacts": ["Ota-ona bilan aloqa", "Контакты родителей"],
+  "noLinkedParents": [
+    "Bu bolaga ota-ona biriktirilmagan.",
+    "К этому ребёнку ещё не привязаны родители.",
+  ],
+  "phoneNotProvided": ["Telefon ko‘rsatilmagan", "Телефон не указан"],
+  "availableTasks": ["Vazifalar", "Доступные задачи"],
+  "recoveryHelp": [
+    "Loginni kiriting. Kod hisobingizga ulangan Telegramga yuboriladi. Telegram ulanmagan bo‘lsa, tashkilot administratoriga murojaat qiling.",
+    "Введите логин. Код придёт в Telegram, связанный с аккаунтом. Если Telegram не подключён, обратитесь к администратору организации.",
+  ],
+  "passwordRecoveryLength": ["Kamida 12 ta belgi", "Не менее 12 символов"],
+  "reportOnScreenHelp": [
+    "Natijalar shu ekranda ochiladi. Fayl kerak bo‘lsa, eksportni tanlang.",
+    "Результаты откроются на этом экране. Для сохранения файла выберите экспорт.",
+  ],
+  "exportReport": ["Eksport", "Экспорт"],
+  "reviewPublication": [
+    "Nashrdan oldin tekshirish",
+    "Проверка перед публикацией",
+  ],
+  "publicationReadRequired": [
+    "Nashrdan oldin qoralamani ko‘rish huquqi kerak. Administratorga murojaat qiling.",
+    "Для проверки перед публикацией нужен доступ к просмотру черновика. Обратитесь к администратору.",
+  ],
+  "publicationReviewHelp": [
+    "Joriy qoralama, ko‘rinadigan bloklar va SEOni tekshiring. Davom etish hali saytni nashr qilmaydi.",
+    "Проверьте текущий черновик, видимость блоков и SEO. Продолжение ещё не публикует сайт.",
+  ],
+  "noDraftChanges": [
+    "Nashr qilinmagan o‘zgarishlar yo‘q",
+    "Нет неопубликованных изменений",
+  ],
+  "draftChangesPending": [
+    "Nashr qilinmagan o‘zgarishlar bor",
+    "Есть неопубликованные изменения",
+  ],
+  "continuePublication": [
+    "Nashr tasdiqlashiga o‘tish",
+    "Перейти к подтверждению публикации",
+  ],
+  "noFilterMatches": [
+    "Qidiruv yoki filtrlarga mos yozuvlar yo‘q.",
+    "Нет записей по этому поиску или фильтрам.",
+  ],
+  "noSessionRecords": [
+    "Bu seansda hali yozuvlar yo‘q.",
+    "В этом сеансе ещё нет записей.",
+  ],
+  "noRecordsInScope": [
+    "Sizga ochiq doirada yozuvlar topilmadi.",
+    "В доступной вам области записей не найдено.",
+  ],
+  "sessionRecordsHelp": [
+    "Yuqoridagi vazifadan boshlang. Ochilgan yoki yaratilgan yozuvlar shu yerda ko‘rinadi.",
+    "Начните с задачи выше. Открытые или созданные записи появятся здесь.",
+  ],
+  "scopeRecordsHelp": [
+    "Natijalar hisobingizning filial va guruh huquqlariga bog‘liq. Ro‘yxatni yangilash uchun pastga torting.",
+    "Результаты зависят от доступа к филиалам и группам. Потяните вниз, чтобы обновить.",
+  ],
+  "importTemplateStep": ["Shablonni yuklab oling", "Скачайте шаблон"],
+  "importValidateStep": [
+    "Faylni tanlang va tekshiring",
+    "Выберите и проверьте файл",
+  ],
+  "importReviewStep": [
+    "Natija va xatolarni tekshiring",
+    "Проверьте результат и ошибки",
+  ],
+  "importCommitHelp": [
+    "Tekshiruv yozuvini oching, xatolarni ko‘ring va shundan keyin importni tasdiqlang. Tekshirish biznes yozuvlarini kiritmaydi.",
+    "Откройте результат проверки, просмотрите ошибки и затем подтвердите импорт. Проверка не добавляет бизнес-записи.",
+  ],
+  "draftEditStep": ["Qoralamani tahrirlang", "Редактируйте черновик"],
+  "draftReviewStep": ["Tekshiring va nashr qiling", "Проверьте и опубликуйте"],
+  "publishedHistoryStep": [
+    "Nashrlar tarixini ko‘ring",
+    "Просмотрите историю публикаций",
+  ],
+  "importNotValidated": [
+    "Bu import tasdiqlashga tayyor emas. Avval faylni tekshiring.",
+    "Этот импорт не готов к подтверждению. Сначала проверьте файл.",
+  ],
+  'bankNameLabel': ['Bank nomi', 'Название банка'],
+  'bankAccountLabel': ['Hisob raqami', 'Расчётный счёт'],
+  'bankCodeLabel': ['MFO', 'МФО'],
+  'taxIdLabel': ['STIR', 'ИНН'],
+  'legalNameLabel': ['Yuridik nomi', 'Юридическое наименование'],
+  'recordReference': ['№', '№'],
+  'opensAt': ['Ochilish vaqti', 'Время открытия'],
+  'closesAt': ['Yopilish vaqti', 'Время закрытия'],
+  'weekday1': ['Dushanba', 'Понедельник'],
+  'weekday2': ['Seshanba', 'Вторник'],
+  'weekday3': ['Chorshanba', 'Среда'],
+  'weekday4': ['Payshanba', 'Четверг'],
+  'weekday5': ['Juma', 'Пятница'],
+  'weekday6': ['Shanba', 'Суббота'],
+  'weekday7': ['Yakshanba', 'Воскресенье'],
+  'keepEditing': ['Tahrirlashni davom ettirish', 'Продолжить редактирование'],
+  'discardChanges': ['O‘zgarishlarni bekor qilish', 'Отменить изменения'],
+  'messagePreview': ['Xabar ko‘rinishi', 'Предпросмотр сообщения'],
+  'chooseTemplateFirst': [
+    'Avval xabar shablonini tanlang.',
+    'Сначала выберите шаблон сообщения.',
+  ],
+  'templateUnavailable': [
+    'Shablon tafsilotlarini ko‘rish uchun ruxsat kerak.',
+    'Для просмотра шаблона требуется разрешение.',
+  ],
+  'optionalPaymentDetails': [
+    'To‘lov tafsilotlari (ixtiyoriy)',
+    'Детали платежа (необязательно)',
+  ],
+
   'checkExport': ['Eksportni tekshirish', 'Проверить экспорт'],
   'items': ['ta yozuv', 'записей'],
   'fields': ['ta maydon', 'полей'],
@@ -67,7 +205,7 @@ const labels = <String, List<String>>{
   'landing': ['Veb-sayt', 'Веб-сайт'],
   'permissions': ['Ruxsatlar', 'Разрешения'],
   'auth': ['Hisob', 'Аккаунт'],
-  'lookups': ['Qidirish', 'Поиск'],
+  'lookups': ['Bolani qidirish', 'Поиск ребёнка'],
   'telegram': ['Telegram', 'Telegram'],
   'add': ['Qo‘shish', 'Добавить'],
 
@@ -179,7 +317,7 @@ const labels = <String, List<String>>{
   'groups': ['Guruhlar', 'Группы'],
   'guardians': ['Ota-onalar', 'Родители'],
   'staff': ['Xodimlar', 'Сотрудники'],
-  'roles': ['Ruxsatlar', 'Роли'],
+  'roles': ['Rollar', 'Роли'],
   'audit': ['Amallar tarixi', 'Журнал действий'],
   'announcements': ['E’lonlar', 'Объявления'],
   'notifications': ['Xabarnomalar', 'Уведомления'],

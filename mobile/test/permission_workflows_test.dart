@@ -92,7 +92,7 @@ void main() {
       expect(find.byIcon(Icons.edit_outlined), findsNothing);
       expect(paths, contains('/children/child-a/medical/alerts'));
       expect(paths, isNot(contains('/children/child-a/medical')));
-      expect(paths, isNot(contains('/children/child-a/guardians')));
+      expect(paths, contains('/children/child-a/guardians'));
       expect(tester.takeException(), isNull);
     },
   );

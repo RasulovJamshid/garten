@@ -167,11 +167,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text(translate('uz', 'retry')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(translate('uz', 'confirm')));
+      await tester.tap(
+        find.widgetWithText(TextButton, translate('uz', 'recordPayment')),
+      );
       await tester.pumpAndSettle();
       final texts = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
-          .map((f) => f.controller!.text);
+          .map((f) => f.controller?.text ?? f.initialValue);
       expect(texts, contains('123.45'));
       expect(texts, contains('Keep this note'));
     },

@@ -3,6 +3,8 @@ import '../core/api.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import 'common.dart';
+import '../core/features.dart';
+import 'workflow_task.dart';
 
 /// Small, explicit field sets. Payloads never contain read-only API properties.
 class RecordEditor extends StatefulWidget {
@@ -181,46 +183,11 @@ class _RecordEditorState extends State<RecordEditor> {
 }
 
 Future<void> addChild(BuildContext context) async {
-  final session = AppScope.of(context);
-  String? branchId;
-  if (session.branches.length == 1) {
-    branchId = session.branches.single['id'].toString();
-  } else {
-    branchId = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      builder: (ctx) => ListView(
-        shrinkWrap: true,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Text(
-              tr(context, 'branch'),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          for (final branch in session.branches)
-            ListTile(
-              title: Text(branch['name'].toString()),
-              onTap: () => Navigator.pop(ctx, branch['id'].toString()),
-            ),
-        ],
-      ),
-    );
-  }
-  if (branchId == null || !context.mounted) return;
-  await Navigator.push<bool>(
+  final catalog = await FeatureCatalog.load();
+  if (!context.mounted) return;
+  await openWorkflowTask(
     context,
-    MaterialPageRoute(
-      builder: (_) => RecordEditor(
-        title: 'addChild',
-        path: '/children',
-        method: 'POST',
-        fields: const ['firstName', 'lastName', 'birthDate'],
-        requiredFields: const {'firstName', 'lastName', 'birthDate'},
-        fixed: {'branchId': branchId},
-        notice: 'applicantNotice',
-      ),
-    ),
+    catalog,
+    catalog.operations.firstWhere((o) => o.id == 'ChildrenController_create'),
   );
 }

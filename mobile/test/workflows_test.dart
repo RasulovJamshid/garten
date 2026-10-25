@@ -49,7 +49,9 @@ void main() {
       for (var attempt = 0; attempt < 2; attempt++) {
         await tester.tap(find.text('Qayta urinish'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Tasdiqlash'));
+        await tester.tap(
+          find.widgetWithText(TextButton, 'To‘lov qabul qilish'),
+        );
         await tester.pumpAndSettle();
       }
       expect(writes, [payload, payload]);

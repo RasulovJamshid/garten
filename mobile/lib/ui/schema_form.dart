@@ -6,6 +6,8 @@ import '../core/session.dart';
 import '../core/strings.dart';
 import 'reference_field.dart';
 import 'permission_selection.dart';
+import 'business_fields.dart';
+import 'organization_details_field.dart';
 import '../core/workflows.dart';
 
 String formLabel(BuildContext context, String key) {
@@ -25,7 +27,9 @@ String displayValue(BuildContext context, String key, dynamic value) {
   if (key == 'date' || RegExp(r'(Date|At|From|To|Until)$').hasMatch(key)) {
     final parsed = DateTime.tryParse(text);
     if (parsed != null && text.length >= 10) {
-      if (text.length == 10) return dateText(text);
+      if (text.length == 10 || key == 'date' || key.endsWith('Date')) {
+        return dateText(text.substring(0, 10));
+      }
       final local = parsed.toUtc().add(const Duration(hours: 5));
       return '${dateText(local.toIso8601String())} · ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
     }
@@ -217,7 +221,8 @@ class _SchemaObjectFormState extends State<SchemaObjectForm> {
                           !widget.suggestedFields.contains(field.key) &&
                           object(field.value)['x-visible'] != true)
                         IconButton(
-                          tooltip: tr(context, 'removeField'),
+                          tooltip:
+                              '${tr(context, 'removeField')}: ${formLabel(context, field.key)}',
                           icon: const Icon(
                             Icons.remove_circle_outline,
                             size: 20,
@@ -377,7 +382,52 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
         ? rawName
         : '${indexedReference[1]}Id';
     final title = formLabel(context, name);
-    final label = widget.name.endsWith('Tiyin') ? '$title (UZS)' : title;
+    final baseLabel = widget.name.endsWith('Tiyin') ? '$title (UZS)' : title;
+    final label = widget.required ? '$baseLabel *' : baseLabel;
+    if (['bankDetails', 'taxInfo'].contains(name)) {
+      return OrganizationDetailsField(
+        name: name,
+        value: widget.value,
+        enabled: widget.enabled,
+        onChanged: widget.onChanged,
+      );
+    }
+    if (name == 'workingDays') {
+      return WeekdayField(
+        label: label,
+        value: widget.value,
+        enabled: widget.enabled,
+        onChanged: widget.onChanged,
+      );
+    }
+    if (name == 'workingHours') {
+      return WorkingHoursField(
+        value: widget.value,
+        enabled: widget.enabled,
+        onChanged: widget.onChanged,
+      );
+    }
+    final isDate =
+        ['date', 'date-time'].contains(schema['format']) ||
+        RegExp(r'(Date|At|From|Until)$').hasMatch(widget.name) ||
+        [
+          'date',
+          'from',
+          'to',
+          'effectiveFrom',
+          'effectiveTo',
+        ].contains(widget.name);
+    if (isDate) {
+      return BusinessDateField(
+        label: label,
+        value: widget.value,
+        onChanged: widget.onChanged,
+        enabled: widget.enabled,
+        required: widget.required,
+        birthDate: name == 'birthDate',
+        timestamp: schema['format'] == 'date-time' || name.endsWith('At'),
+      );
+    }
     if (name == 'blocks' && type == 'array') {
       final values = records(widget.value);
       void move(int from, int to) {
