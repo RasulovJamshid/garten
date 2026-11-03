@@ -163,21 +163,27 @@ class StatusPill extends StatelessWidget {
       'sent',
     ].contains(status);
     final bad = ['cancelled', 'failed', 'sick', 'suspended'].contains(status);
-    final color = good
-        ? Theme.of(context).colorScheme.secondary
+    final scheme = Theme.of(context).colorScheme;
+    final foreground = good
+        ? scheme.onSecondaryContainer
         : bad
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
+        ? scheme.onErrorContainer
+        : scheme.onPrimaryContainer;
+    final background = good
+        ? scheme.secondaryContainer
+        : bad
+        ? scheme.errorContainer
+        : scheme.primaryContainer;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .09),
+        color: background,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         tr(context, status),
         style: TextStyle(
-          color: color,
+          color: foreground,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),

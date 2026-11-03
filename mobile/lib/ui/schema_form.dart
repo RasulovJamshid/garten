@@ -344,6 +344,7 @@ class SchemaValueForm extends StatefulWidget {
 
 class _SchemaValueFormState extends State<SchemaValueForm> {
   late final controller = TextEditingController(text: display(widget.value));
+  final uploadFocus = FocusNode();
   late String recipientKind = object(widget.value).containsKey('userId')
       ? 'userId'
       : 'guardianId';
@@ -369,6 +370,7 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
   @override
   void dispose() {
     controller.dispose();
+    uploadFocus.dispose();
     super.dispose();
   }
 
@@ -579,6 +581,7 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             OutlinedButton.icon(
+              focusNode: uploadFocus,
               onPressed: !widget.enabled
                   ? null
                   : () async {
@@ -592,7 +595,10 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
               label: Text(field.value?.name ?? tr(context, 'chooseFile')),
             ),
             if (field.errorText != null)
-              Text(field.errorText!, style: const TextStyle(color: Colors.red)),
+              Text(
+                field.errorText!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
           ],
         ),
       );
@@ -700,14 +706,23 @@ class _SchemaValueFormState extends State<SchemaValueForm> {
                           },
                         ),
                       ),
-                      IconButton(
-                        onPressed: !widget.enabled
-                            ? null
-                            : () {
-                                values.removeAt(i);
-                                widget.onChanged(values);
-                              },
-                        icon: const Icon(Icons.remove_circle_outline),
+                      Tooltip(
+                        message:
+                            '${tr(context, 'removeItem')}: ${formLabel(context, widget.name)} ${i + 1}',
+                        excludeFromSemantics: true,
+                        child: IconButton(
+                          onPressed: !widget.enabled
+                              ? null
+                              : () {
+                                  values.removeAt(i);
+                                  widget.onChanged(values);
+                                },
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            semanticLabel:
+                                '${tr(context, 'removeItem')}: ${formLabel(context, widget.name)} ${i + 1}',
+                          ),
+                        ),
                       ),
                     ],
                   ),

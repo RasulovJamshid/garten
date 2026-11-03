@@ -5,11 +5,12 @@ import '../core/api.dart';
 import '../core/features.dart' show decimalMoney;
 import '../core/session.dart';
 import '../core/strings.dart';
-import 'children.dart';
 import 'common.dart';
 import 'schema_form.dart';
 import 'payment_details.dart';
 import 'reference_picker.dart';
+import 'form_feedback.dart';
+import 'payment_child_field.dart';
 
 class PaymentPage extends StatefulWidget {
   const PaymentPage({super.key, this.initialChild});
@@ -129,14 +130,11 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Future<void> submit() async {
-    if (busy || restoring || recoveryFailed || !form.currentState!.validate()) {
-      return;
-    }
-    if (child == null) {
-      toast(context, tr(context, 'children'));
+    if (busy || restoring || recoveryFailed || !validateAndReveal(form)) {
       return;
     }
     final session = AppScope.of(context);
+    final wasUncertain = submission != null;
     final payload =
         submission ??
         {
@@ -204,9 +202,12 @@ class _PaymentPageState extends State<PaymentPage> {
         Navigator.pop(context, true);
       }
     } catch (e) {
-      // Validation errors are definitive rejection, so the operator can fix
-      // fields. Timeouts/server errors keep the original operation intact.
-      if (e is ApiFailure && [400, 422].contains(e.status)) {
+      // A later rejection cannot establish that an earlier attempt did not
+      // commit. Restored operations always remain immutable until resolved.
+      if (!wasUncertain &&
+          e is ApiFailure &&
+          e.status == 422 &&
+          e.code == 'VALIDATION_FAILED') {
         try {
           await session.api.secrets.delete(storageKey);
           submission = null;
@@ -254,135 +255,113 @@ class _PaymentPageState extends State<PaymentPage> {
           ? FailureView(error!, restore)
           : Form(
               key: form,
-              child: ListView(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                children: [
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.child_care),
-                      title: Text(
-                        child == null
-                            ? tr(context, 'children')
-                            : childName(child!),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      subtitle: child == null
-                          ? null
-                          : Text(referenceSubtitle(context, child!)),
-                      onTap: busy || submission != null
-                          ? null
-                          : () async {
-                              final selected = await Navigator.push<Json>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ChildrenPage(
-                                    select: true,
-                                    lookupPermission: 'payment:create',
-                                  ),
-                                ),
-                              );
-                              if (selected != null && mounted) {
-                                setState(() {
-                                  child = selected;
-                                  details.remove('payerGuardianId');
-                                  details.remove('allocations');
-                                  dirty = true;
-                                });
-                              }
-                            },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (submission != null) ...[
-                    Text(
-                      money(submission!['amountTiyin']),
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(tr(context, 'paymentUncertain')),
-                    const SizedBox(height: 16),
-                  ],
-                  if (submission == null) ...[
-                    TextFormField(
-                      controller: amount,
-                      enabled: !busy,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onChanged: (_) => setState(() => dirty = true),
-                      decoration: InputDecoration(
-                        labelText: tr(context, 'amount'),
-                      ),
-                      validator: (v) {
-                        try {
-                          toTiyin(v ?? '');
-                          return null;
-                        } catch (_) {
-                          return tr(context, 'invalidAmount');
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: method,
-                      decoration: InputDecoration(
-                        labelText: tr(context, 'method'),
-                      ),
-                      items: ['cash', 'bank', 'card', 'online', 'other']
-                          .map(
-                            (m) => DropdownMenuItem(
-                              value: m,
-                              child: Text(tr(context, m)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: busy
-                          ? null
-                          : (v) => setState(() {
-                              method = v!;
-                              dirty = true;
-                            }),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: note,
-                      enabled: !busy,
-                      maxLines: 3,
-                      onChanged: (_) => setState(() => dirty = true),
-                      decoration: InputDecoration(
-                        labelText: tr(context, 'note'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SchemaObjectForm(
-                      schema: paymentDetailSchema,
-                      value: details,
-                      referenceValues: {'childId': child?['id']},
-                      enabled: !busy,
-                      onChanged: (v) => setState(() {
-                        details = v;
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    PaymentChildField(
+                      child: child,
+                      enabled: !busy && submission == null,
+                      onChanged: (selected) => setState(() {
+                        child = selected;
+                        details.remove('payerGuardianId');
+                        details.remove('allocations');
                         dirty = true;
                       }),
                     ),
-                  ],
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        errorText(context, error!),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                    const SizedBox(height: 12),
+                    if (submission != null) ...[
+                      Text(
+                        money(submission!['amountTiyin']),
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(tr(context, 'paymentUncertain')),
+                      const SizedBox(height: 16),
+                    ],
+                    if (submission == null) ...[
+                      TextFormField(
+                        controller: amount,
+                        enabled: !busy,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() => dirty = true),
+                        decoration: InputDecoration(
+                          labelText: tr(context, 'amount'),
+                        ),
+                        validator: (v) {
+                          try {
+                            toTiyin(v ?? '');
+                            return null;
+                          } catch (_) {
+                            return tr(context, 'invalidAmount');
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        initialValue: method,
+                        decoration: InputDecoration(
+                          labelText: tr(context, 'method'),
+                        ),
+                        items: ['cash', 'bank', 'card', 'online', 'other']
+                            .map(
+                              (m) => DropdownMenuItem(
+                                value: m,
+                                child: Text(tr(context, m)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: busy
+                            ? null
+                            : (v) => setState(() {
+                                method = v!;
+                                dirty = true;
+                              }),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: note,
+                        enabled: !busy,
+                        maxLines: 3,
+                        onChanged: (_) => setState(() => dirty = true),
+                        decoration: InputDecoration(
+                          labelText: tr(context, 'note'),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      SchemaObjectForm(
+                        schema: paymentDetailSchema,
+                        value: details,
+                        referenceValues: {'childId': child?['id']},
+                        enabled: !busy,
+                        onChanged: (v) => setState(() {
+                          details = v;
+                          dirty = true;
+                        }),
+                      ),
+                    ],
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          errorText(context, error!),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: busy ? null : submit,
+                      child: Text(
+                        tr(context, submission == null ? 'next' : 'retry'),
+                      ),
                     ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: busy ? null : submit,
-                    child: Text(
-                      tr(context, submission == null ? 'next' : 'retry'),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
     ),

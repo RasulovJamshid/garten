@@ -144,7 +144,7 @@ void main() {
     },
   );
   testWidgets(
-    'rejected recovered payment retains fractional amount and note for correction',
+    'rejected recovered payment retains its exact amount note and request key',
     (tester) async {
       final secrets = MemorySecrets();
       secrets.values['payment:https://test.invalid/api/v1:user-1'] = jsonEncode(
@@ -171,11 +171,17 @@ void main() {
         find.widgetWithText(TextButton, translate('uz', 'recordPayment')),
       );
       await tester.pumpAndSettle();
-      final texts = tester
-          .widgetList<TextFormField>(find.byType(TextFormField))
-          .map((f) => f.controller?.text ?? f.initialValue);
-      expect(texts, contains('123.45'));
-      expect(texts, contains('Keep this note'));
+      // A later rejection cannot establish the outcome of the earlier request.
+      expect(find.byType(TextFormField), findsNothing);
+      expect(find.text('123.45 UZS'), findsOneWidget);
+      final saved = object(
+        jsonDecode(
+          secrets.values['payment:https://test.invalid/api/v1:user-1']!,
+        ),
+      );
+      expect(saved['key'], 'same-request');
+      expect(object(saved['payload'])['amountTiyin'], '12345');
+      expect(object(saved['payload'])['note'], 'Keep this note');
     },
   );
   testWidgets(

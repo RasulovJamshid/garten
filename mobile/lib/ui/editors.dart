@@ -5,6 +5,7 @@ import '../core/strings.dart';
 import 'common.dart';
 import '../core/features.dart';
 import 'workflow_task.dart';
+import 'form_feedback.dart';
 
 /// Small, explicit field sets. Payloads never contain read-only API properties.
 class RecordEditor extends StatefulWidget {
@@ -47,7 +48,7 @@ class _RecordEditorState extends State<RecordEditor> {
   }
 
   Future<void> save() async {
-    if (!form.currentState!.validate()) return;
+    if (busy || !validateAndReveal(form)) return;
     setState(() {
       busy = true;
       error = null;
@@ -98,84 +99,89 @@ class _RecordEditorState extends State<RecordEditor> {
       appBar: AppBar(title: Text(tr(context, widget.title))),
       body: Form(
         key: form,
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          children: [
-            if (widget.notice != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Text(tr(context, widget.notice!)),
-              ),
-            for (final field in widget.fields)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: TextFormField(
-                  controller: controllers[field],
-                  enabled: !busy,
-                  readOnly: field == 'birthDate',
-                  onTap: field != 'birthDate'
-                      ? null
-                      : () async {
-                          final now = DateTime.parse(today());
-                          final date = await showDatePicker(
-                            context: context,
-                            initialDate: DateTime(
-                              now.year - 3,
-                              now.month,
-                              now.day,
-                            ),
-                            firstDate: DateTime(now.year - 18),
-                            lastDate: now,
-                          );
-                          if (date != null && mounted) {
-                            controllers[field]!.text =
-                                '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-                            setState(() => dirty = true);
-                          }
-                        },
-                  minLines:
-                      [
-                        'note',
-                        'emergencyInstructions',
-                        'chronicConditions',
-                      ].contains(field)
-                      ? 3
-                      : 1,
-                  maxLines:
-                      [
-                        'note',
-                        'emergencyInstructions',
-                        'chronicConditions',
-                      ].contains(field)
-                      ? 5
-                      : 1,
-                  decoration: InputDecoration(
-                    labelText: tr(context, field),
-                    suffixIcon: field == 'birthDate'
-                        ? const Icon(Icons.calendar_month)
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.notice != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Text(tr(context, widget.notice!)),
+                ),
+              for (final field in widget.fields)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: TextFormField(
+                    controller: controllers[field],
+                    enabled: !busy,
+                    readOnly: field == 'birthDate',
+                    onTap: field != 'birthDate'
+                        ? null
+                        : () async {
+                            final now = DateTime.parse(today());
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime(
+                                now.year - 3,
+                                now.month,
+                                now.day,
+                              ),
+                              firstDate: DateTime(now.year - 18),
+                              lastDate: now,
+                            );
+                            if (date != null && mounted) {
+                              controllers[field]!.text =
+                                  '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                              setState(() => dirty = true);
+                            }
+                          },
+                    minLines:
+                        [
+                          'note',
+                          'emergencyInstructions',
+                          'chronicConditions',
+                        ].contains(field)
+                        ? 3
+                        : 1,
+                    maxLines:
+                        [
+                          'note',
+                          'emergencyInstructions',
+                          'chronicConditions',
+                        ].contains(field)
+                        ? 5
+                        : 1,
+                    decoration: InputDecoration(
+                      labelText: tr(context, field),
+                      suffixIcon: field == 'birthDate'
+                          ? const Icon(Icons.calendar_month)
+                          : null,
+                    ),
+                    onChanged: (_) => setState(() => dirty = true),
+                    validator: (value) =>
+                        widget.requiredFields.contains(field) &&
+                            (value == null || value.trim().isEmpty)
+                        ? tr(context, 'required')
                         : null,
                   ),
-                  onChanged: (_) => setState(() => dirty = true),
-                  validator: (value) =>
-                      widget.requiredFields.contains(field) &&
-                          (value == null || value.trim().isEmpty)
-                      ? tr(context, 'required')
-                      : null,
                 ),
-              ),
-            if (error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  errorText(context, error!),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    errorText(context, error!),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
+              FilledButton(
+                onPressed: busy ? null : save,
+                child: Text(tr(context, 'save')),
               ),
-            FilledButton(
-              onPressed: busy ? null : save,
-              child: Text(tr(context, 'save')),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

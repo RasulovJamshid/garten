@@ -54,7 +54,14 @@ const labels = <String, List<String>>{
     "Loginni kiriting. Kod hisobingizga ulangan Telegramga yuboriladi. Telegram ulanmagan bo‘lsa, tashkilot administratoriga murojaat qiling.",
     "Введите логин. Код придёт в Telegram, связанный с аккаунтом. Если Telegram не подключён, обратитесь к администратору организации.",
   ],
-  "passwordRecoveryLength": ["Kamida 12 ta belgi", "Не менее 12 символов"],
+  "passwordRecoveryLength": ["Kamida 10 ta belgi", "Не менее 10 символов"],
+  'removeItem': ['Elementni olib tashlash', 'Удалить элемент'],
+  'selectChildRequired': ['Bolani tanlang', 'Выберите ребёнка'],
+  'recoveryLoginRequired': ['Loginni kiriting', 'Введите логин'],
+  'recoveryCodeRequired': [
+    'Tiklash kodini kiriting',
+    'Введите код восстановления',
+  ],
   "reportOnScreenHelp": [
     "Natijalar shu ekranda ochiladi. Fayl kerak bo‘lsa, eksportni tanlang.",
     "Результаты откроются на этом экране. Для сохранения файла выберите экспорт.",
@@ -420,8 +427,8 @@ const labels = <String, List<String>>{
   'refreshAccess': ['Ruxsatlarni yangilash', 'Обновить доступ'],
   'forgot': ['Parolni unutdingizmi?', 'Забыли пароль?'],
   'resetSent': [
-    'Hisobingiz Telegramga ulangan bo‘lsa, tiklash kodi yuboriladi.',
-    'Если аккаунт связан с Telegram, будет отправлен код восстановления.',
+    'Hisobingiz Telegramga ulangan bo‘lsa, tiklash kodi yuboriladi. Kod 1 soat amal qiladi. Xabar kelmasa, tashkilot administratoriga murojaat qiling.',
+    'Если аккаунт связан с Telegram, будет отправлен код восстановления. Код действует 1 час. Если сообщения нет, обратитесь к администратору организации.',
   ],
   'reset': ['Parolni tiklash', 'Восстановить пароль'],
   'token': ['Tiklash kodi', 'Код восстановления'],

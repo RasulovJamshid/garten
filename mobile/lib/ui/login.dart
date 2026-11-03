@@ -183,10 +183,11 @@ class ResetPasswordPage extends StatefulWidget {
 }
 
 class _ResetPasswordPageState extends State<ResetPasswordPage> {
+  final form = GlobalKey<FormState>();
   final login = TextEditingController(),
       token = TextEditingController(),
       password = TextEditingController();
-  bool sent = false, busy = false;
+  bool sent = false, busy = false, hidden = true;
   @override
   void dispose() {
     login.dispose();
@@ -196,11 +197,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   }
 
   Future<void> send() async {
-    if ((!sent && login.text.trim().isEmpty) ||
-        (sent && (token.text.trim().isEmpty || password.text.length < 12))) {
-      toast(context, tr(context, 'required'));
-      return;
-    }
+    if (busy || !validateAndReveal(form)) return;
     setState(() => busy = true);
     try {
       final api = AppScope.of(context).api;
@@ -228,40 +225,82 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(tr(context, 'reset'))),
-    body: ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        if (!sent) ...[
-          Text(tr(context, 'recoveryHelp')),
-          const SizedBox(height: 20),
-          TextField(
-            controller: login,
-            decoration: InputDecoration(labelText: tr(context, 'username')),
-          ),
-        ],
-        if (sent) ...[
-          Text(tr(context, 'resetSent')),
-          const SizedBox(height: 20),
-          TextField(
-            controller: token,
-            decoration: InputDecoration(labelText: tr(context, 'token')),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: password,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: tr(context, 'newPassword'),
-              helperText: tr(context, 'passwordRecoveryLength'),
+    body: Form(
+      key: form,
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          if (!sent) ...[
+            Text(tr(context, 'recoveryHelp')),
+            const SizedBox(height: 20),
+            TextFormField(
+              key: const ValueKey('recovery-login'),
+              controller: login,
+              enabled: !busy,
+              autocorrect: false,
+              autofillHints: const [AutofillHints.username],
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => send(),
+              decoration: InputDecoration(labelText: tr(context, 'username')),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? tr(context, 'recoveryLoginRequired')
+                  : null,
             ),
+          ],
+          if (sent) ...[
+            Text(tr(context, 'resetSent')),
+            const SizedBox(height: 20),
+            TextFormField(
+              key: const ValueKey('recovery-code'),
+              controller: token,
+              enabled: !busy,
+              autocorrect: false,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(labelText: tr(context, 'token')),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? tr(context, 'recoveryCodeRequired')
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              key: const ValueKey('recovery-password'),
+              controller: password,
+              enabled: !busy,
+              obscureText: hidden,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => send(),
+              decoration: InputDecoration(
+                labelText: tr(context, 'newPassword'),
+                helperText: tr(context, 'passwordRecoveryLength'),
+                suffixIcon: IconButton(
+                  tooltip: tr(
+                    context,
+                    hidden ? 'showPassword' : 'hidePassword',
+                  ),
+                  onPressed: busy
+                      ? null
+                      : () => setState(() => hidden = !hidden),
+                  icon: Icon(
+                    hidden
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                ),
+              ),
+              validator: (value) => (value?.length ?? 0) < 10
+                  ? tr(context, 'passwordRecoveryLength')
+                  : null,
+            ),
+          ],
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: busy ? null : send,
+            child: Text(tr(context, sent ? 'save' : 'next')),
           ),
         ],
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: busy ? null : send,
-          child: Text(tr(context, sent ? 'save' : 'next')),
-        ),
-      ],
+      ),
     ),
   );
 }
